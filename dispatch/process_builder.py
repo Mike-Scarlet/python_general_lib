@@ -1,12 +1,15 @@
 
 __all__ = [
   "ThreadQueue",
-  "OneInProcessPool"
+  "ProcessQueue",
+  "OneInProcessPool",
+  "OneInOneOutProcessPool",
 ]
 
 import multiprocessing
 
 ThreadQueue = multiprocessing.Queue
+ProcessQueue = multiprocessing.Queue
 
 def OneInThreadProcessWrapper(i: int, in_queue: multiprocessing.Queue, process_fn, init_obj_fn):
   obj = None
@@ -17,6 +20,17 @@ def OneInThreadProcessWrapper(i: int, in_queue: multiprocessing.Queue, process_f
     if item is None:
       break
     process_fn(item=item, i=i, obj=obj)
+
+def OneInOneOutThreadProcessWrapper(i: int, in_queue: multiprocessing.Queue, out_queue: multiprocessing.Queue, process_fn, init_obj_fn):
+  obj = None
+  if init_obj_fn is not None:
+    obj = init_obj_fn(i=i)
+  while True:
+    item = in_queue.get()
+    if item is None:
+      break
+    result = process_fn(item=item, i=i, obj=obj)
+    out_queue.put(result)
 
 class OneInProcessPool:
   def __init__(self, thread_count, in_queue: multiprocessing.Queue, process_fn, init_obj_fn=None) -> None:
@@ -44,8 +58,30 @@ class OneInProcessPool:
     self.JoinProcesses()
 
 class OneInOneOutProcessPool:
-  def __init__(self) -> None:
-    pass
+  def __init__(self, thread_count, in_queue: multiprocessing.Queue, out_queue: multiprocessing.Queue, process_fn, init_obj_fn=None) -> None:
+    self.__in_queue = in_queue
+    self.__processes = []
+    self.__thread_count = thread_count
+    self.__active = True
+
+    for i in range(self.__thread_count):
+      t = multiprocessing.Process(target=OneInOneOutThreadProcessWrapper, kwargs={
+        "i": i, "in_queue": in_queue, "out_queue": out_queue, "process_fn": process_fn, "init_obj_fn": init_obj_fn})
+      t.start()
+      self.__processes.append(t)
+  
+  def JoinProcesses(self):
+    if not self.__active:
+      raise ValueError("try to join an inactive OneInOneOutProcessPool")
+    self.__active = False
+    for i in range(self.__thread_count):
+      self.__in_queue.put(None)
+    
+    for i in range(self.__thread_count):
+      self.__processes[i].join()
+
+  def Join(self):
+    self.JoinProcesses()
 
 import time
 def f(item, **kwargs):

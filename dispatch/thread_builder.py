@@ -75,3 +75,6 @@ class OneInOneOutThreadPool:
     
     for i in range(self.__thread_count):
       self.__threads[i].join()
+
+  def Join(self):
+    self.JoinThreads()
