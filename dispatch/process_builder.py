@@ -1,6 +1,5 @@
 
 __all__ = [
-  "ThreadQueue",
   "ProcessQueue",
   "OneInProcessPool",
   "OneInOneOutProcessPool",
@@ -8,7 +7,6 @@ __all__ = [
 
 import multiprocessing
 
-ThreadQueue = multiprocessing.Queue
 ProcessQueue = multiprocessing.Queue
 
 def OneInThreadProcessWrapper(i: int, in_queue: multiprocessing.Queue, process_fn, init_obj_fn):
