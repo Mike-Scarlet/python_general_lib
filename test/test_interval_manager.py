@@ -26,14 +26,17 @@ def test_interval_manager():
 
   # Remove an interval that splits an existing interval in two
   manager.RemoveInterval(Interval(4, 12))
-  assert manager.GetIntervals() == [Interval(0, 2), Interval(4, 4), Interval(12, 15), Interval(20, 25)]
+  assert manager.GetIntervals() == [Interval(0, 2), Interval(12, 15), Interval(20, 25)]
 
   # Remove an interval that completely contains an existing interval
   manager.RemoveInterval(Interval(5, 20))
-  assert manager.GetIntervals() == [Interval(0, 2), Interval(4, 4), Interval(20, 25)]
+  assert manager.GetIntervals() == [Interval(0, 2), Interval(20, 25)]
 
   manager.AddInterval(Interval(4, 4))
   assert manager.GetIntervals() == [Interval(0, 2), Interval(4, 4), Interval(20, 25)]
+
+  manager.AddInterval(Interval(4, 5))
+  assert manager.GetIntervals() == [Interval(0, 2), Interval(4, 5), Interval(20, 25)]
 
 if __name__ == "__main__":
   test_interval_manager()

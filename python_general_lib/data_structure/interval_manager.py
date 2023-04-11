@@ -24,6 +24,8 @@ class IntervalManager:
       end = max(interval.GetEnd(), self.intervals[intersecting_intervals[-1]].GetEnd())
       self.intervals[intersecting_intervals[0]:intersecting_intervals[-1]+1] = [Interval(start, end)]
 
+    self._SortIntervals()
+
   def RemoveInterval(self, interval: Interval) -> None:
     remove_intervals = [interval]
 
@@ -33,9 +35,9 @@ class IntervalManager:
         if not remove_interval.Intersects(existing_interval):
           new_intervals.append(existing_interval)
         else:
-          if remove_interval.GetStart() >= existing_interval.GetStart():
+          if remove_interval.GetStart() > existing_interval.GetStart():
             new_intervals.append(Interval(existing_interval.GetStart(), remove_interval.GetStart()))
-          if remove_interval.GetEnd() <= existing_interval.GetEnd():
+          if remove_interval.GetEnd() < existing_interval.GetEnd():
             new_intervals.append(Interval(remove_interval.GetEnd(), existing_interval.GetEnd()))
       self.intervals = new_intervals
 
