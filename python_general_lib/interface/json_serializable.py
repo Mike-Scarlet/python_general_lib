@@ -26,10 +26,13 @@ def AutoObjectToJsonHandler(obj):
       continue
 
     item = getattr(obj, prop_name)
-    try: 
-      json.dumps(item)
-    except:
-      continue
+    if isinstance(item, IJsonSerializable):
+      item = item.ToJson()
+    else:
+      try: 
+        json.dumps(item)
+      except:
+        continue
 
     name_value_dict[prop_name] = item
   return name_value_dict
