@@ -19,11 +19,17 @@ class IJsonSerializable:
       self.FromJson(j)
 
 def AutoObjectToJsonHandler(obj):
+  obj_class = type(obj)
+  all_class_props = dir(obj_class)
+
   all_sub_props = dir(obj)
   name_value_dict = {}
   for prop_name in all_sub_props:
     if prop_name.startswith("__") and prop_name.endswith("__"):
       continue
+
+    if prop_name in all_class_props:
+      continue   # class member
 
     item = getattr(obj, prop_name)
     if isinstance(item, IJsonSerializable):
