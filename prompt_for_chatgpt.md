@@ -1,1 +1,1 @@
-i will ask you some question about coding and data structure, when answering, you need to make sure that the function name is in upper camel cased, indent the code with 2 spaces, when constructing python string, do not use f-string
+i will ask you some question about coding and data structure, when answering, you need to make sure that the function name is in upper camel cased, the variable is in underscore cased, indent the code with 2 spaces, when constructing python string, do not use f-string
