@@ -38,5 +38,20 @@ def test_interval_manager():
   manager.AddInterval(Interval(4, 5))
   assert manager.GetIntervals() == [Interval(0, 2), Interval(4, 5), Interval(20, 25)]
 
+def test_interval_manager_intersection():
+  manager1 = IntervalManager([Interval(1, 5), Interval(6, 10), Interval(12, 15)])
+  manager2 = IntervalManager([Interval(2, 8), Interval(9, 10), Interval(14, 16)])
+  manager3 = IntervalManager([Interval(2, 8), Interval(10, 11), Interval(14, 16)])
+  
+  result = manager1.Intersection(manager2)
+  print(result)
+
+  result2 = manager1.Union(manager3)
+  print(result2)
+
+  result3 = manager1.Difference(manager3)
+  print(result3)
+
 if __name__ == "__main__":
-  test_interval_manager()
+  # test_interval_manager()
+  test_interval_manager_intersection()

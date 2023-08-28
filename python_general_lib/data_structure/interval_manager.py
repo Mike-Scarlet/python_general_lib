@@ -45,6 +45,54 @@ class IntervalManager:
 
   def GetIntervals(self) -> List[Interval]:
     return self.intervals
+  
+  def Intersection(self, other: 'IntervalManager') -> 'IntervalManager':
+    intersection_manager = IntervalManager()
+    
+    i = 0
+    j = 0
+    while i < len(self.intervals) and j < len(other.intervals):
+      interval1 = self.intervals[i]
+      interval2 = other.intervals[j]
+      
+      if interval1.GetEnd() < interval2.GetStart():
+        i += 1
+      elif interval2.GetEnd() < interval1.GetStart():
+        j += 1
+      else:
+        intersection = interval1.Intersection(interval2)
+        if intersection.IsValid():
+          intersection_manager.AddInterval(intersection)
+        
+        if interval1.GetEnd() < interval2.GetEnd():
+          i += 1
+        else:
+          j += 1
+    
+    return intersection_manager
+  
+  def Union(self, other: 'IntervalManager') -> 'IntervalManager':
+    union_manager = IntervalManager()
+    
+    for interval in self.intervals:
+      union_manager.AddInterval(interval)
+    
+    for interval in other.intervals:
+      union_manager.AddInterval(interval)
+    
+    return union_manager
+  
+  def Difference(self, other: 'IntervalManager') -> 'IntervalManager':
+    difference_manager = IntervalManager()
+
+    for interval in self.intervals:
+      difference_manager.AddInterval(interval)
+
+    for interval in other.intervals:
+      difference_manager.RemoveInterval(interval)
+
+    return difference_manager
+
 
   def __str__(self) -> str:
     intervals_str = ', '.join(str(i) for i in self.intervals)
