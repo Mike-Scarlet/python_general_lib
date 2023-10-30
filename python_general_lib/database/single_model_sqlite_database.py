@@ -11,8 +11,8 @@ class SingleModelSQLiteDatabase:
     self.table_name = model_class.__name__
     self.primary_keys = primary_keys
 
-    self.conn = None
-    self.op = None
+    self._conn = None
+    self._op = None
 
   def Initiate(self):
     # initiate by model class
@@ -30,18 +30,18 @@ class SingleModelSQLiteDatabase:
     db_table_structure = SQLDatabase.CreateFromDict(db_initiate_dict)
 
     # then connect the db
-    self.conn = SQLite3Connector(self.db_path, db_table_structure)
-    self.conn.Connect(do_check=False)
-    self.conn.TableValidation()
+    self._conn = SQLite3Connector(self.db_path, db_table_structure)
+    self._conn.Connect(do_check=False)
+    self._conn.TableValidation()
 
-    self.op = SQLite3Operator(self.conn)
+    self._op = SQLite3Operator(self._conn)
 
   def InsertRecord(self, item: IJsonSerializable, or_condition: str=""):
     insert_dict = item.ToJson()
-    self.op.InsertDictToTable(insert_dict, self.table_name, or_condition)
+    self._op.InsertDictToTable(insert_dict, self.table_name, or_condition)
 
   def QueryRecords(self, query_condition: str=None):
-    raw_records = self.op.SelectFieldFromTable("*", self.table_name, query_condition)
+    raw_records = self._op.SelectFieldFromTable("*", self.table_name, query_condition)
     results = []
     for record in raw_records:
       item = self.model_class()
