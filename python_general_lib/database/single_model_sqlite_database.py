@@ -17,16 +17,7 @@ class SingleModelSQLiteDatabase:
   def Initiate(self):
     # initiate by model class
     # create a temp model object
-    db_initiate_dict = {self.table_name: {"field_definition": {}}}
-    temp_obj = self.model_class()
-    for name, python_type in self.model_class.__annotations__.items():
-      field_str = SQLField.GetSQLTypeFromPythonType(python_type)
-      if isinstance(getattr(temp_obj, name), python_type) and python_type != str:   # string is not enabled
-        field_str += " DEFAULT {}".format(getattr(temp_obj, name))
-      db_initiate_dict[self.table_name]["field_definition"][name] = field_str
-    db_initiate_dict[self.table_name]["primary_keys"] = self.primary_keys
-    # print(json.dumps(db_initiate_dict, indent=2))
-
+    db_initiate_dict = ClassAndPrimaryKeyToTableInitiateDict(self.model_class, self.table_name, self.primary_keys)
     db_table_structure = SQLDatabase.CreateFromDict(db_initiate_dict)
 
     # then connect the db
