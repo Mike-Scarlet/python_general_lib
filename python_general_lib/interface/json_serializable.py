@@ -18,6 +18,16 @@ class IJsonSerializable:
       j = json.load(f)
       self.FromJson(j)
 
+  def DefaultToJson(self) -> typing.Union[dict, list]:
+    return AutoObjectToJsonHandler(self)
+  
+  def DefaultFromJson(self, j) -> None:
+    return AutoObjectFromJsonHander(self, j)
+  
+  def _UseDefaultJsonSerializeMethod(self):
+    self.ToJson = self.DefaultToJson
+    self.FromJson = self.DefaultFromJson
+
 def AutoObjectToJsonHandler(obj):
   obj_class = type(obj)
   all_class_props = dir(obj_class)
