@@ -15,3 +15,17 @@ def GetListValidIntervals(l, is_valid_fn):
         # add new
         result.append([i, i])
   return result
+
+def GetListSamePropertyIntervals(l, two_item_same_prop_fn):
+  if len(l) == 0:
+    return []
+  result = [[0, 0]]
+  for i in range(1, len(l)):
+    last_interval = result[-1]
+    if two_item_same_prop_fn(l[i-1], l[i]):
+      # extend
+      last_interval[1] = i
+    else:
+      # add new
+      result.append([i, i])
+  return result
