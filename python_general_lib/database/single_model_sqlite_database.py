@@ -10,6 +10,8 @@ class SingleModelSQLiteDatabase:
     self.model_class = model_class
     self.table_name = model_class.__name__
     self.primary_keys = primary_keys
+    if isinstance(self.primary_keys, str):
+      self.primary_keys = [self.primary_keys]
 
     self.conn = None
     self.op = None
