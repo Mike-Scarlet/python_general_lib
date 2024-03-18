@@ -22,7 +22,7 @@ class IJsonSerializable:
     return AutoObjectToJsonHandler(self)
   
   def DefaultFromJson(self, j) -> None:
-    return AutoObjectFromJsonHander(self, j)
+    return AutoObjectFromJsonHander(self, j, allow_not_defined_attr=True)
   
   def _UseDefaultJsonSerializeMethod(self):
     self.ToJson = self.DefaultToJson

@@ -10,6 +10,8 @@ class SingleModelSQLiteDatabase:
     self.model_class = model_class
     self.table_name = model_class.__name__
     self.primary_keys = primary_keys
+    if isinstance(self.primary_keys, str):
+      self.primary_keys = [self.primary_keys]
 
     self._conn = None
     self._op = None
@@ -39,6 +41,23 @@ class SingleModelSQLiteDatabase:
       item.FromJson(record)
       results.append(item)
     return results
+
+  def QueryRecordsAsJson(self, query_condition: str=None):
+    raw_records = self.op.SelectFieldFromTable("*", self.table_name, query_condition)
+    results = []
+    for record in raw_records:
+      results.append(record)
+    return results
+  
+  def RawQueryRecords(self, query_key="*", query_condition: str=None):
+    raw_records = self.op.RawSelectFieldFromTable(query_key, self.table_name, query_condition)
+    results = []
+    for record in raw_records:
+      results.append(record)
+    return results
+
+  def Commit(self):
+    self.op.Commit()
 
 if __name__ == "__main__":
   class TestClass:
