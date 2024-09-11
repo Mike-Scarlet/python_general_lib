@@ -28,6 +28,22 @@ class IJsonSerializable:
     self.ToJson = self.DefaultToJson
     self.FromJson = self.DefaultFromJson
 
+class IJsonSerializableWithDefault:
+  def SaveToJsonFile(self, file_path, **kwargs) -> None:
+    with open(file_path, "w", encoding="utf-8") as f:
+      json.dump(self.ToJson(), f, **kwargs)
+
+  def LoadFromJsonFile(self, file_path) -> None:
+    with open(file_path, "r", encoding="utf-8") as f:
+      j = json.load(f)
+      self.FromJson(j)
+
+  def ToJson(self) -> typing.Union[dict, list]:
+    return AutoObjectToJsonHandler(self)
+  
+  def FromJson(self, j) -> None:
+    return AutoObjectFromJsonHander(self, j, allow_not_defined_attr=True)
+
 def AutoObjectToJsonHandler(obj):
   obj_class = type(obj)
   all_class_props = dir(obj_class)
