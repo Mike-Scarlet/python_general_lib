@@ -70,6 +70,11 @@ class TimeEvaluator:
     with self._enabled_lock:
       return self._enabled
 
+  def ClearStats(self):
+    """Clears all collected timing statistics."""
+    with self._stats_lock:
+      self._stats.clear()
+
 class TimerContext:
   def __init__(self, name=None):
     self.name = name if name else "default"
@@ -140,4 +145,8 @@ def TimeEvaluatorPrintStats():
 2. 有一个能够评估一个函数运行时间的装饰器
 3. 上下文管理器和装饰器，可以被命名，如果有命名的话每次运行完代码段之后，会把名字相同的段的运行时间统计出来，提供一个方法获取统计结果，提供一个方法基于统计结果打印具体信息
 4. 所有处理是线程安全的
+
+我还想要一个全局开关，打开或关闭时间统计功能
+
+我还希望有一个清除统计数据的函数
 """
