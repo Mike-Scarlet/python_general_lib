@@ -4,15 +4,17 @@ from contextlib import ContextDecorator
 
 class TimeEvaluator:
   _instance = None
-  _lock = threading.Lock()
+  _instance_lock = threading.Lock()
 
   def __new__(cls):
     if not cls._instance:
-      with cls._lock:
+      with cls._instance_lock:
         if not cls._instance:
           cls._instance = super(TimeEvaluator, cls).__new__(cls)
           cls._instance._stats = {}
           cls._instance._stats_lock = threading.Lock()
+          cls._instance._enabled = True
+          cls._instance._enabled_lock = threading.Lock()
     return cls._instance
 
   def _update_stats(self, name, elapsed):
@@ -52,18 +54,36 @@ class TimeEvaluator:
       )
       print(line)
 
+  @classmethod
+  def Enable(cls):
+    evaluator = cls()
+    with evaluator._enabled_lock:
+      evaluator._enabled = True
+
+  @classmethod
+  def Disable(cls):
+    evaluator = cls()
+    with evaluator._enabled_lock:
+      evaluator._enabled = False
+
+  def IsEnabled(self):
+    with self._enabled_lock:
+      return self._enabled
+
 class TimerContext:
   def __init__(self, name=None):
     self.name = name if name else "default"
     self.evaluator = TimeEvaluator()
 
   def __enter__(self):
-    self.start_time = time.time()
+    if self.evaluator.IsEnabled():
+      self.start_time = time.time()
 
   def __exit__(self, exc_type, exc_val, exc_tb):
-    end_time = time.time()
-    elapsed = end_time - self.start_time
-    self.evaluator._update_stats(self.name, elapsed)
+    if self.evaluator.IsEnabled():
+      end_time = time.time()
+      elapsed = end_time - self.start_time
+      self.evaluator._update_stats(self.name, elapsed)
 
 class TimerDecorator(ContextDecorator):
   def __init__(self, func=None, name=None):
@@ -75,13 +95,16 @@ class TimerDecorator(ContextDecorator):
 
   def __call__(self, *args, **kwargs):
     name = self.name if self.name else self.func.__name__
-    start_time = time.time()
-    try:
+    if self.evaluator.IsEnabled():
+      start_time = time.time()
+      try:
+        return self.func(*args, **kwargs)
+      finally:
+        end_time = time.time()
+        elapsed = end_time - start_time
+        self.evaluator._update_stats(name, elapsed)
+    else:
       return self.func(*args, **kwargs)
-    finally:
-      end_time = time.time()
-      elapsed = end_time - start_time
-      self.evaluator._update_stats(name, elapsed)
 
   def __get__(self, obj, objtype):
     # Support instance methods
