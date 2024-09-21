@@ -5,3 +5,4 @@ i will ask you some question about coding and data structure, when answering, yo
 2. 变量名称使用 snake_case
 3. 从变量创建string时，使用format函数，不要使用f-string
 4. 缩进使用两个空格
+5. 注释使用英文
