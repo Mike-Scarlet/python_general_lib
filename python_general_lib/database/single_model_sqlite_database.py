@@ -48,7 +48,7 @@ class SingleModelSQLiteDatabase:
     return results
   
   def QueryRecordsAdvanced(self, sub_condition: str=None):
-    raw_records = self.op.SelectFieldFromTableAdvanced("*", self.table_name, sub_condition)
+    raw_records = self._op.SelectFieldFromTableAdvanced("*", self.table_name, sub_condition)
     results = []
     for record in raw_records:
       item = self.model_class()
@@ -57,14 +57,14 @@ class SingleModelSQLiteDatabase:
     return results
 
   def QueryRecordsAsJson(self, query_condition: str=None):
-    raw_records = self.op.SelectFieldFromTable("*", self.table_name, query_condition)
+    raw_records = self._op.SelectFieldFromTable("*", self.table_name, query_condition)
     results = []
     for record in raw_records:
       results.append(record)
     return results
   
   def RawQueryRecords(self, query_key="*", query_condition: str=None):
-    raw_records = self.op.RawSelectFieldFromTable(query_key, self.table_name, query_condition)
+    raw_records = self._op.RawSelectFieldFromTable(query_key, self.table_name, query_condition)
     results = []
     for record in raw_records:
       results.append(record)
@@ -72,7 +72,7 @@ class SingleModelSQLiteDatabase:
   
   def RawSelectFieldFromTableWithReturnFieldName(self, fields, sub_condition: str=None):
     """ fast interface """
-    raw_records = self.op.RawSelectFieldFromTableWithReturnFieldName(fields, self.table_name, sub_condition)
+    raw_records = self._op.RawSelectFieldFromTableWithReturnFieldName(fields, self.table_name, sub_condition)
     return raw_records
   
   def RecordFieldChanged(self, item: IJsonSerializable, update_fields: typing.Union[str, typing.List[str]]):
@@ -91,13 +91,13 @@ class SingleModelSQLiteDatabase:
     for key in self.primary_keys:
       where_syntaxs.append("{} = {}".format(key, _ItemToWhereStatement(getattr(item, key))))
     where_stmt = " AND ".join(where_syntaxs)
-    self.op.UpdateFieldFromTable(
+    self._op.UpdateFieldFromTable(
       update_dict, 
       self.table_name, 
       where_stmt)
 
   def Commit(self):
-    self.op.Commit()
+    self._op.Commit()
 
 if __name__ == "__main__":
   class TestClass:
