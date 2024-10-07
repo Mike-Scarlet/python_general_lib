@@ -21,15 +21,17 @@ class SingleModelSQLiteDatabase:
     self._conn = None
     self._op = None
 
-  def Initiate(self):
+  def Initiate(self, check_same_thread=True, commit_when_leave=True, verbose_level=10):
     # initiate by model class
     # create a temp model object
     db_initiate_dict = ClassAndPrimaryKeyToTableInitiateDict(self.model_class, self.table_name, self.primary_keys)
     db_table_structure = SQLDatabase.CreateFromDict(db_initiate_dict)
 
     # then connect the db
-    self._conn = SQLite3Connector(self.db_path, db_table_structure)
-    self._conn.Connect(do_check=False)
+    self._conn = SQLite3Connector(self.db_path, db_table_structure, 
+                                  commit_when_leave=commit_when_leave,
+                                  verbose_level=verbose_level)
+    self._conn.Connect(do_check=False, check_same_thread=check_same_thread)
     self._conn.TableValidation()
 
     self._op = SQLite3Operator(self._conn)
