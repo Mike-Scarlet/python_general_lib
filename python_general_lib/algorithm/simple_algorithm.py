@@ -1,5 +1,5 @@
 
-def GetListValidIntervals(l, is_valid_fn):
+def GetListValidIntervals(l, is_valid_fn=lambda x: x):
   result = []
   for i in range(len(l)):
     if not is_valid_fn(l[i]):
