@@ -1,5 +1,7 @@
 __pycache__/
 *.pyc
 *.pyd
+*.db
 *.egg-info
+*.zip
 build/

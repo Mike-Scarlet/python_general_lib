@@ -105,7 +105,7 @@ class SevenZipDecompressor(Decompressor):
             self._log(logging.DEBUG, f"Decompression STDOUT:\n{stdout}\nSTDERR:\n{stderr}")
             return False
 
-    def list_contents(self, archive_path: str) -> Optional[List[Dict[str, str]]]:
+    def list_contents(self, archive_path: str, password: Optional[str] = None) -> Optional[List[Dict[str, str]]]:
         """
         Lists the contents of an archive using the '7z l' command.
         Parses output to extract file information.
@@ -118,6 +118,9 @@ class SevenZipDecompressor(Decompressor):
         self._check_availability()
 
         command = [self.executable_path, 'l', archive_path]
+        if password:
+            command.append(f'-p{password}')
+            
         self._log(logging.INFO, f"Executing 7z list command for '{archive_path}'")
         returncode, stdout, stderr = self._execute_command(command)
 

@@ -130,7 +130,7 @@ class Decompressor(ABC):
         pass
 
     @abstractmethod
-    def list_contents(self, archive_path: str) -> Optional[List[Dict[str, str]]]:
+    def list_contents(self, archive_path: str, password: Optional[str] = None) -> Optional[List[Dict[str, str]]]:
         """
         Abstract listing operation.
         Availability of the decompressor will be checked before execution.
