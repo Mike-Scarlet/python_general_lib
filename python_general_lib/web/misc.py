@@ -38,7 +38,7 @@ def ParseCookieStrAsDict(cookie_str):
     line = line.strip()
     if len(line) == 0:
       continue
-    line_sp = line.split("=")
+    line_sp = line.split("=", 1)
     if len(line_sp) != 2:
       raise ValueError("cannot handle this line: ", line)
     kv_dict[line_sp[0]] = line_sp[1]
