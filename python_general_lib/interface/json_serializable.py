@@ -58,7 +58,7 @@ def AutoObjectToJsonHandler(obj):
       continue   # class member
 
     item = getattr(obj, prop_name)
-    if isinstance(item, IJsonSerializable):
+    if isinstance(item, IJsonSerializable) or isinstance(item, IJsonSerializableWithDefault):
       item = item.ToJson()
     else:
       try: 

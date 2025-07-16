@@ -4,199 +4,122 @@ import subprocess
 import shutil # For shutil.which() to find executables in PATH
 import logging
 from typing import List, Dict, Optional
-from python_general_lib.thirdparty.decompressor.decompressor import Decompressor
+from python_general_lib.thirdparty.decompressor.command_line_decompressor import CommandLineDecompressor
 
 # Assuming Decompressor base class is defined as in the previous turns
 
-class UnRARDecompressor(Decompressor):
-    """
-    A concrete implementation of the Decompressor abstract base class
-    for handling RAR archives using the 'unrar' command-line utility.
-
-    During initialization, it attempts to find 'unrar' in the system's PATH
-    and automatically sets its availability. If not found or verification fails,
-    it remains unavailable until a specific path is provided via set_executable_path.
-    """
-
+class UnRARDecompressor(CommandLineDecompressor):
+    """Implementation for RAR decompression using unrar"""
+    
     def __init__(self):
-        """
-        Initializes the UnRARDecompressor.
-        Attempts to find 'unrar' in the system's PATH upon instantiation
-        and sets its initial availability status.
-        """
-        super().__init__()
-        
-        default_unrar_path = shutil.which("unrar")
-        
-        if default_unrar_path:
-            self._log(logging.INFO, f"Attempting initial verification of 'unrar' from PATH: {default_unrar_path}")
-            if self.set_executable_path(default_unrar_path):
-                self._log(logging.INFO, "UnRARDecompressor is initially available via system PATH.")
-            else:
-                self._log(logging.WARNING, f"Initial verification of '{default_unrar_path}' failed. UnRARDecompressor is not available yet.")
-        else:
-            self._log(logging.INFO, "'unrar' command not found in system PATH during initialization. UnRARDecompressor is not available yet.")
-            self._is_available = False
-
-    def _verify_executable(self, executable_path: str) -> bool:
-        """
-        Verifies if the given executable path points to a valid 'unrar' command.
-        This is done by running 'unrar' with no arguments, which typically prints
-        its usage information or version, and checking for specific keywords.
-        :param executable_path: The path to the 'unrar' executable.
-        :return: True if the executable is identified as 'unrar', False otherwise.
-        """
-        try:
-            process = subprocess.run([executable_path], capture_output=True, text=True, check=False, timeout=10)
-            stdout_lower = process.stdout.lower()
-            stderr_lower = process.stderr.lower()
-
-            if "unrar" in stdout_lower and ("rar archive" in stdout_lower or "copyright" in stdout_lower or "usage" in stdout_lower or "unrar.exe" in stdout_lower):
-                self._log(logging.DEBUG, f"Executable '{executable_path}' successfully verified as 'unrar'.")
-                return True
-            if "unrar" in stderr_lower and ("rar archive" in stderr_lower or "copyright" in stderr_lower or "usage" in stderr_lower or "unrar.exe" in stderr_lower):
-                self._log(logging.DEBUG, f"Executable '{executable_path}' successfully verified as 'unrar' (output to stderr).")
-                return True
-            
-            self._log(logging.INFO, f"Executable '{executable_path}' failed verification. Output did not match expected 'unrar' patterns.")
-            self._log(logging.DEBUG, f"STDOUT:\n{process.stdout}")
-            self._log(logging.DEBUG, f"STDERR:\n{process.stderr}")
-            return False
-        except (subprocess.CalledProcessError, FileNotFoundError, TimeoutError) as e:
-            self._log(logging.DEBUG, f"Error during 'unrar' executable verification for '{executable_path}': {e}")
-            return False
-        except Exception as e:
-            self._log(logging.DEBUG, f"An unknown error occurred during 'unrar' executable verification for '{executable_path}': {e}")
-            return False
+        super().__init__(
+            executable_names=["unrar", "unrar.exe"],
+            verification_keywords=["unrar", "rar archive", "copyright", "usage"]
+        )
 
     def decompress(self, archive_path: str, output_path: str, password: Optional[str] = None) -> bool:
         """
-        Decompresses a RAR archive using the 'unrar x' command.
-        The 'x' command extracts files with full paths.
-        Uses '-o+' to automatically overwrite existing files without prompting.
-        :param archive_path: Path to the RAR archive.
-        :param output_path: Directory to extract files to. Will be created if it doesn't exist.
-        :param password: Optional password for encrypted archives.
-        :return: True on successful decompression, False otherwise.
+        Decompress a RAR archive
+        
+        :param archive_path: Path to RAR archive
+        :param output_path: Output directory
+        :param password: Optional password
+        :return: True on success, False on failure
         """
-        self._check_availability() # Ensure the decompressor is available
-
         # Ensure output directory exists
         os.makedirs(output_path, exist_ok=True)
-
-        # Added '-o+' switch to overwrite existing files without prompting
-        command = [self.executable_path, 'x', archive_path, output_path, '-o+'] 
+        
+        # Build decompression command
+        command = [self._executable_path, 'x', archive_path, output_path, '-o+']
         if password:
-            command.extend([f'-p{password}']) # -p<password> for password
-
-        self._log(logging.INFO, f"Executing unrar decompression command for '{archive_path}'")
+            command.append(f'-p{password}')
+            
+        # Execute command and check result
         returncode, stdout, stderr = self._execute_command(command)
-
-        # 'unrar' returns 0 on success.
+        
+        # Log results
         if returncode == 0:
-            self._log(logging.INFO, f"Successfully decompressed '{archive_path}' to '{output_path}'.")
+            self._log(logging.INFO, f"Successfully decompressed '{archive_path}' to '{output_path}'")
             return True
         else:
-            self._log(logging.ERROR, f"Decompression of '{archive_path}' failed. Exit code: {returncode}")
-            self._log(logging.DEBUG, f"Decompression STDOUT:\n{stdout}\nSTDERR:\n{stderr}")
+            self._log(logging.ERROR, f"Decompression failed for '{archive_path}', error code: {returncode}")
+            self._log(logging.DEBUG, f"STDOUT: {stdout}")
+            self._log(logging.DEBUG, f"STDERR: {stderr}")
             return False
 
-    def list_contents(self, archive_path: str) -> Optional[List[Dict[str, str]]]:
+    def list_contents(self, archive_path: str, password: Optional[str] = None) -> Optional[List[Dict[str, str]]]:
         """
-        Lists the contents of a RAR archive using the 'unrar l' command.
-        Adjusted regex to match the provided output format.
-        :param archive_path: Path to the RAR archive.
-        :return: A list of dictionaries, each representing a file/directory
-                 with 'name' and 'size' (and potentially 'date', 'attr').
-                 Returns None if listing fails.
+        List contents of a RAR archive
+        
+        :param archive_path: Path to RAR archive
+        :param password: Optional password
+        :return: List of contents or None on failure
         """
-        self._check_availability() # Ensure the decompressor is available
-
-        command = [self.executable_path, 'l', archive_path]
-        self._log(logging.INFO, f"Executing unrar list command for '{archive_path}'")
+        # Build list command
+        command = [self._executable_path, 'l', archive_path]
+        if password:
+            command.append(f'-p{password}')
+            
+        # Execute command
         returncode, stdout, stderr = self._execute_command(command)
-
-        if returncode == 0:
-            contents = []
-            # Updated regex to match the specific 'unrar 7.00' output format:
-            # Attributes      Size      Date    Time    Name
-            # ----------- ---------  ---------- -----  ----
-            #  -rw-r--r--    361666  2022-12-31 04:50  sample-1_1.webp
-            # ----------- ---------  ---------- -----  ----
-            #               361666                      1 (Summary line, ignore)
-            
-            # This regex captures Attributes, Size, Date, Time, and Name.
-            # It uses flexible whitespace matching (\s+) and specific column structures.
-            file_pattern = re.compile(
-                r'^\s*(?P<attributes>[a-zA-Z-]+)\s+' # Attributes (e.g., -rw-r--r--)
-                r'(?P<size>\d+)\s+'                  # Size (digits)
-                r'(?P<date>\d{4}-\d{2}-\d{2})\s+'    # Date (YYYY-MM-DD)
-                r'(?P<time>\d{2}:\d{2})\s+'          # Time (HH:MM)
-                r'(?P<name>.*)$'                     # Name (rest of the line, non-greedy)
-            )
-            
-            in_content_section = False
-            for line in stdout.splitlines():
-                line_strip = line.strip()
-                if line_strip.startswith('-----------'): # Start or end of content section
-                    if in_content_section: # Second '-----------' indicates end
-                        break
-                    else: # First '-----------' indicates start of content
-                        in_content_section = True
-                        continue # Skip the header line itself
-
-                if in_content_section and line_strip: # Process content lines
-                    match = file_pattern.match(line)
-                    if match:
-                        item_data = match.groupdict()
-                        contents.append({
-                            'name': item_data['name'].strip(),
-                            'size': item_data['size'] + ' Bytes', # Add unit for clarity
-                            'date_modified': f"{item_data['date']} {item_data['time']}",
-                            'attributes': item_data['attributes']
-                        })
-                    # This specific 'unrar 7.00' output doesn't seem to have explicit directory lines ending with '/'.
-                    # Directories are usually just listed without size/date/time.
-                    # We might need a separate pattern if directories are formatted differently.
-                    # Based on your example, it only shows a file.
-            self._log(logging.INFO, f"Successfully listed contents for '{archive_path}'. Found {len(contents)} items.")
-            return contents
-        else:
-            self._log(logging.ERROR, f"Failed to list contents of '{archive_path}'. Exit code: {returncode}")
-            self._log(logging.DEBUG, f"Listing STDOUT:\n{stdout}\nSTDERR:\n{stderr}")
-            return None
+        
+        # Define parsing rules for unrar output
+        parse_rules = {
+            'header_pattern': re.compile(r'Attributes\s+Size\s+Date\s+Time\s+Name'),
+            'header_separator_pattern': re.compile(r'^-+\s+-+\s+-+\s+-+\s+-+$'),
+            'row_pattern': re.compile(
+                r'^\s*(?P<attributes>[a-zA-Z-]+)\s+'
+                r'(?P<size>\d+)\s+'
+                r'(?P<date>\d{4}-\d{2}-\d{2})\s+'
+                r'(?P<time>\d{2}:\d{2})\s+'
+                r'(?P<name>.*)$'
+            ),
+            'footer_pattern': re.compile(r'^-+\s+-+\s+-+\s+-+\s+-+$'),
+            'skip_patterns': [
+                r'^UNRAR\s+\d',  # Skip version line
+                r'^Archive:',     # Skip archive info
+                r'^Details:',      # Skip details
+            ],
+            'is_dir_indicator': 'd',  # Lowercase 'd' in attributes indicates directory
+        }
+        
+        contents = self._parse_list_output(stdout, parse_rules)
+        self._log(logging.INFO, f"Successfully listed '{archive_path}', found {len(contents)} items")
+        return contents
 
     def test_archive(self, archive_path: str, password: Optional[str] = None) -> bool:
         """
-        Tests the integrity of a RAR archive using the 'unrar t' command.
-        :param archive_path: Path to the RAR archive.
-        :param password: Optional password.
-        :return: True if the archive passes the test, False otherwise.
+        Test integrity of a RAR archive
+        
+        :param archive_path: Path to RAR archive
+        :param password: Optional password
+        :return: True on success, False on failure
         """
-        super().test_archive(archive_path, password)
-
-        command = [self.executable_path, 't', archive_path]
+        # Build test command
+        command = [self._executable_path, 't', archive_path]
         if password:
-            command.extend([f'-p{password}'])
-
-        self._log(logging.INFO, f"Executing unrar test command for '{archive_path}'")
+            command.append(f'-p{password}')
+            
+        # Execute command
         returncode, stdout, stderr = self._execute_command(command)
-
+        
+        # Check result
         if returncode == 0:
-            self._log(logging.INFO, f"Archive '{archive_path}' integrity test successful.")
+            self._log(logging.INFO, f"Archive '{archive_path}' integrity test successful")
             return True
         else:
-            self._log(logging.ERROR, f"Archive '{archive_path}' integrity test failed. Exit code: {returncode}")
-            self._log(logging.DEBUG, f"Test STDOUT:\n{stdout}\nSTDERR:\n{stderr}")
+            self._log(logging.ERROR, f"Archive '{archive_path}' integrity test failed, error code: {returncode}")
+            self._log(logging.DEBUG, f"STDOUT: {stdout}")
+            self._log(logging.DEBUG, f"STDERR: {stderr}")
             return False
 
     def get_supported_formats(self) -> List[str]:
         """
-        Returns the list of compression formats supported by the 'unrar' utility.
-        :return: A list of supported format strings (e.g., ['rar']).
+        Get list of supported formats
+        
+        :return: List of supported formats (['rar'])
         """
-        super().get_supported_formats()
-        self._log(logging.INFO, "Querying supported formats for UnRARDecompressor.")
+        self._log(logging.INFO, "Querying supported formats - RAR")
         return ['rar']
 
 # --- Example Usage ---
