@@ -5,7 +5,7 @@ import subprocess
 import shutil
 import logging
 from typing import List, Dict, Optional
-from python_general_lib.thirdparty.decompressor.decompressor import Decompressor
+from python_general_lib.thirdparty.decompressor.command_line_decompressor import CommandLineDecompressor
 
 class BandizipDecompressor(Decompressor):
     def __init__(self):
@@ -55,7 +55,7 @@ class BandizipDecompressor(Decompressor):
             self._log(logging.ERROR, f"An error occurred during verification command '{' '.join(command)}': {e}")
             return -1, "", str(e)
 
-    def decompress(self, archive_path: str, output_path: str, password: Optional[str] = None) -> bool:
+    def decompress(self, archive_path: str, output_path: str, password: Optional[str] = None, extra_switch: Optional[list[str]] = None) -> bool:
         """
         Decompresses an archive using Bandizip's bz.exe.
         The command format is generally: bz.exe x [archive_path] -o:[output_path] -p:[password]
