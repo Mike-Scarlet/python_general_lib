@@ -75,8 +75,8 @@ class CommandLineDecompressor:
         self._is_available = False
 
     def set_executable_path(self, 
-                           executable_path: str, 
-                           verification_keywords: List[str]) -> bool:
+                            executable_path: str, 
+                            verification_keywords: List[str]) -> bool:
         """
         Set and verify the executable path
         
@@ -136,7 +136,8 @@ class CommandLineDecompressor:
                 command, 
                 capture_output=True, 
                 text=True, 
-                check=False
+                check=False,
+                encoding='utf-8'
             )
             return process.returncode, process.stdout, process.stderr
         except Exception as e:
