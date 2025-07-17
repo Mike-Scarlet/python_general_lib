@@ -17,7 +17,13 @@ class UnRARDecompressor(CommandLineDecompressor):
             verification_keywords=["unrar", "rar archive", "copyright", "usage"]
         )
 
-    def decompress(self, archive_path: str, output_path: str, password: Optional[str] = None) -> bool:
+    def add_password_to_command(self, command, password=None):
+        if password:
+            command.append(f'-p{password}')
+        else:
+            command.append(f'-p""')
+
+    def decompress(self, archive_path: str, output_path: str, password: Optional[str] = None, extra_switch: Optional[list[str]] = None) -> bool:
         """
         Decompress a RAR archive
         
@@ -31,8 +37,7 @@ class UnRARDecompressor(CommandLineDecompressor):
         
         # Build decompression command
         command = [self._executable_path, 'x', archive_path, output_path, '-o+']
-        if password:
-            command.append(f'-p{password}')
+        self.add_password_to_command(command, password)
             
         # Execute command and check result
         returncode, stdout, stderr = self._execute_command(command)
@@ -57,8 +62,7 @@ class UnRARDecompressor(CommandLineDecompressor):
         """
         # Build list command
         command = [self._executable_path, 'l', archive_path]
-        if password:
-            command.append(f'-p{password}')
+        self.add_password_to_command(command, password)
             
         # Execute command
         returncode, stdout, stderr = self._execute_command(command)
@@ -97,8 +101,7 @@ class UnRARDecompressor(CommandLineDecompressor):
         """
         # Build test command
         command = [self._executable_path, 't', archive_path]
-        if password:
-            command.append(f'-p{password}')
+        self.add_password_to_command(command, password)
             
         # Execute command
         returncode, stdout, stderr = self._execute_command(command)

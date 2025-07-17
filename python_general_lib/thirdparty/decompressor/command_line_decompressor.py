@@ -248,7 +248,7 @@ class CommandLineDecompressor:
         
         return contents
 
-    def decompress(self, archive_path: str, output_path: str, password: Optional[str] = None) -> bool:
+    def decompress(self, archive_path: str, output_path: str, password: Optional[str] = None, extra_switch: Optional[list[str]] = None) -> bool:
         """
         Decompress an archive file
         

@@ -24,7 +24,13 @@ class SevenZipDecompressor(CommandLineDecompressor):
             verification_keywords=["7-zip", "copyright", "usage"]
         )
 
-    def decompress(self, archive_path: str, output_path: str, password: Optional[str] = None) -> bool:
+    def add_password_to_command(self, command, password=None):
+        if password:
+            command.append(f'-p{password}')
+        else:
+            command.append(f'-p""')
+
+    def decompress(self, archive_path: str, output_path: str, password: Optional[str] = None, extra_switch: Optional[list[str]] = None) -> bool:
         """
         Decompress an archive using 7z
         
@@ -44,10 +50,12 @@ class SevenZipDecompressor(CommandLineDecompressor):
             f'-o{output_path}',  # Output directory
             '-aoa'  # Overwrite all existing files without prompt
         ]
+
+        if extra_switch:
+            command.extend(extra_switch)
         
         # Add password if provided
-        if password:
-            command.append(f'-p{password}')
+        self.add_password_to_command(command, password)
             
         # Execute command
         returncode, stdout, stderr = self._execute_command(command)
@@ -61,7 +69,7 @@ class SevenZipDecompressor(CommandLineDecompressor):
             self._log(logging.DEBUG, f"STDOUT: {stdout}")
             self._log(logging.DEBUG, f"STDERR: {stderr}")
             return False
-
+        
     def list_contents(self, archive_path: str, password: Optional[str] = None) -> Optional[List[Dict[str, str]]]:
         """
         List contents of an archive using 7z
@@ -72,8 +80,7 @@ class SevenZipDecompressor(CommandLineDecompressor):
         """
         # Build list command
         command = [self._executable_path, 'l', archive_path]
-        if password:
-            command.append(f'-p{password}')
+        self.add_password_to_command(command, password)
             
         # Execute command
         returncode, stdout, stderr = self._execute_command(command)
@@ -130,8 +137,7 @@ class SevenZipDecompressor(CommandLineDecompressor):
         """
         # Build test command
         command = [self._executable_path, 't', archive_path]
-        if password:
-            command.append(f'-p{password}')
+        self.add_password_to_command(command, password)
             
         # Execute command
         returncode, stdout, stderr = self._execute_command(command)
