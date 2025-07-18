@@ -54,6 +54,19 @@ class MultipleModelsSQLiteDatabase:
     insert_dict = item.ToJson()
     self._op.InsertDictToTable(insert_dict, table_name, or_condition)
 
+  def RemoveRecord(self, item: IJsonSerializable):
+    table_name = self.class_to_table_name_dict[item.__class__]
+    item_primary_keys = self.model_primary_keys_dict.get(item.__class__, None)
+
+    if item_primary_keys is None or len(item_primary_keys) == 0:
+      raise ValueError("RemoveRecord only available for class with primary_keys")
+    # primary key to where
+    where_syntaxs = []
+    for key in item_primary_keys:
+      where_syntaxs.append("{} = {}".format(key, _ItemToWhereStatement(getattr(item, key))))
+    where_stmt = " AND ".join(where_syntaxs)
+    self._op.DeleteFromTableByCondition(table_name, where_stmt)
+
   def QueryRecords(self, model_class, query_condition: str=None):
     table_name = self.class_to_table_name_dict[model_class]
     raw_records = self._op.SelectFieldFromTable("*", table_name, query_condition)
