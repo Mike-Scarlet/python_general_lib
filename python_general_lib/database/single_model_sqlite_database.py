@@ -40,6 +40,18 @@ class SingleModelSQLiteDatabase:
     insert_dict = item.ToJson()
     self._op.InsertDictToTable(insert_dict, self.table_name, or_condition)
 
+  def RemoveRecord(self, item: IJsonSerializable):
+    if self.primary_keys is None or len(self.primary_keys) == 0:
+      raise ValueError("RemoveRecord only available for class with primary_keys")
+    # primary key to where
+    where_syntaxs = []
+    for key in self.primary_keys:
+      where_syntaxs.append("{} = {}".format(key, _ItemToWhereStatement(getattr(item, key))))
+    where_stmt = " AND ".join(where_syntaxs)
+    self._op.DeleteFromTableByCondition(
+      self.table_name, 
+      where_stmt)
+
   def QueryRecords(self, query_condition: str=None):
     raw_records = self._op.SelectFieldFromTable("*", self.table_name, query_condition)
     results = []
