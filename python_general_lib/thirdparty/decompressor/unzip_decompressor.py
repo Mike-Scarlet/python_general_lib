@@ -23,6 +23,12 @@ class UnZIPDecompressor(CommandLineDecompressor):
             executable_names=["unzip"],
             verification_keywords=["unzip", "pkzip", "copyright", "usage"]
         )
+        
+    def add_password_to_command(self, command, password=None):
+        if password:
+            command.extend(['-P', password])
+        else:
+            command.append(['-P', '1'])
 
     def decompress(self, archive_path: str, output_path: str, password: Optional[str] = None, extra_switch: Optional[list[str]] = None) -> bool:
         """
@@ -45,8 +51,7 @@ class UnZIPDecompressor(CommandLineDecompressor):
         ]
         
         # Add password if provided
-        if password:
-            command.extend(['-P', password])
+        self.add_password_to_command(command, password)
             
         # Execute command
         returncode, stdout, stderr = self._execute_command(command)
@@ -71,8 +76,7 @@ class UnZIPDecompressor(CommandLineDecompressor):
         """
         # Build list command
         command = [self._executable_path, '-l', archive_path]
-        if password:
-            command.extend(['-P', password])
+        self.add_password_to_command(command, password)
             
         # Execute command
         returncode, stdout, stderr = self._execute_command(command)
@@ -118,8 +122,7 @@ class UnZIPDecompressor(CommandLineDecompressor):
         """
         # Build test command
         command = [self._executable_path, '-t', archive_path]
-        if password:
-            command.extend(['-P', password])
+        self.add_password_to_command(command, password)
             
         # Execute command
         returncode, stdout, stderr = self._execute_command(command)
