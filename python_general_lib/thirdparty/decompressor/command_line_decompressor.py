@@ -1,9 +1,11 @@
-import os
+import os, sys
 import re
 import subprocess
 import shutil
 import logging
 from typing import List, Dict, Optional, Tuple, Pattern, Callable, Any
+
+_decompressor_commandline_encoding = 'utf-8' # if sys.platform.startswith("win") else 'utf-8'
 
 class CommandLineDecompressor:
     """
@@ -103,7 +105,8 @@ class CommandLineDecompressor:
                 capture_output=True, 
                 text=True, 
                 check=False, 
-                timeout=10
+                timeout=10,
+                encoding=_decompressor_commandline_encoding
             )
             output = process.stdout.lower() + process.stderr.lower()
             
@@ -137,7 +140,7 @@ class CommandLineDecompressor:
                 capture_output=True, 
                 text=True, 
                 check=False,
-                encoding='utf-8'
+                encoding=_decompressor_commandline_encoding
             )
             return process.returncode, process.stdout, process.stderr
         except Exception as e:
