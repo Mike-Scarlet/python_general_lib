@@ -46,12 +46,15 @@ class UnZIPDecompressor(CommandLineDecompressor):
         command = [
             self._executable_path, 
             '-o',  # Overwrite files without prompting
-            archive_path, 
-            '-d', output_path  # Specify output directory
         ]
         
         # Add password if provided
         self.add_password_to_command(command, password)
+        
+        command.extend([
+          archive_path, 
+          '-d', output_path  # Specify output directory
+        ])
             
         # Execute command
         returncode, stdout, stderr = self._execute_command(command)
@@ -75,8 +78,9 @@ class UnZIPDecompressor(CommandLineDecompressor):
         :return: List of contents or None on failure
         """
         # Build list command
-        command = [self._executable_path, '-l', archive_path]
+        command = [self._executable_path, '-l']
         self.add_password_to_command(command, password)
+        command.append(archive_path)
             
         # Execute command
         returncode, stdout, stderr = self._execute_command(command)
@@ -121,8 +125,9 @@ class UnZIPDecompressor(CommandLineDecompressor):
         :return: True on success, False on failure
         """
         # Build test command
-        command = [self._executable_path, '-t', archive_path]
+        command = [self._executable_path, '-t']
         self.add_password_to_command(command, password)
+        command.append(archive_path)
             
         # Execute command
         returncode, stdout, stderr = self._execute_command(command)
