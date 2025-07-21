@@ -3,9 +3,34 @@ import re
 import subprocess
 import shutil
 import logging
+import chardet
 from typing import List, Dict, Optional, Tuple, Pattern, Callable, Any
 
 _decompressor_commandline_encoding = 'utf-8' # if sys.platform.startswith("win") else 'utf-8'
+
+def run_command_safely(command):
+    process = subprocess.run(
+        command,
+        capture_output=True,  # 捕获二进制输出
+        text=False,           # 确保返回的是bytes而不是str
+        check=False,
+    )
+    
+    # 使用chardet检测编码并解码stdout
+    if process.stdout:
+        encoding_info = chardet.detect(process.stdout)
+        stdout_decoded = process.stdout.decode(encoding_info['encoding'], errors='replace')
+    else:
+        stdout_decoded = ""
+    
+    # 使用chardet检测编码并解码stderr
+    if process.stderr:
+        encoding_info = chardet.detect(process.stderr)
+        stderr_decoded = process.stderr.decode(encoding_info['encoding'], errors='replace')
+    else:
+        stderr_decoded = ""
+    
+    return process.returncode, stdout_decoded, stderr_decoded
 
 class CommandLineDecompressor:
     """
@@ -135,14 +160,15 @@ class CommandLineDecompressor:
         self._check_availability()
         try:
             self._log(logging.DEBUG, f"Executing command: {' '.join(command)}")
-            process = subprocess.run(
-                command, 
-                capture_output=True, 
-                text=True, 
-                check=False,
-                encoding=_decompressor_commandline_encoding
-            )
-            return process.returncode, process.stdout, process.stderr
+            return run_command_safely(command)
+            # process = subprocess.run(
+            #     command, 
+            #     capture_output=True, 
+            #     text=True, 
+            #     check=False,
+            #     encoding=_decompressor_commandline_encoding
+            # )
+            # return process.returncode, process.stdout, process.stderr
         except Exception as e:
             self._log(logging.ERROR, f"Command execution error: {e}")
             return -1, "", str(e)
