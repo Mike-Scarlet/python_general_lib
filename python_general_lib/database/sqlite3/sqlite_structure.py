@@ -225,7 +225,7 @@ class ForeignKey:
     self.on_delete = on_delete  # Options: 'CASCADE', 'SET NULL', 'NO ACTION', etc.
     self.on_update = on_update
   
-  def get_constraint_str(self) -> str:
+  def GetConstraintStr(self) -> str:
     """Generate SQL fragment for foreign key constraint"""
     parts = [
       f"FOREIGN KEY ({', '.join(self.local_columns)})",
@@ -245,7 +245,7 @@ class UniqueConstraint:
     self.columns = columns
     self.constraint_name = constraint_name
     
-  def get_constraint_str(self) -> str:
+  def GetConstraintStr(self) -> str:
     """Generate SQL fragment for unique constraint"""
     name_clause = f"CONSTRAINT {self.constraint_name} " if self.constraint_name else ""
     return f"{name_clause}UNIQUE ({', '.join(self.columns)})"
@@ -255,7 +255,7 @@ class PrimaryKeyConstraint:
   def __init__(self, columns: typing.List[str]):
     self.columns = columns
     
-  def get_constraint_str(self) -> str:
+  def GetConstraintStr(self) -> str:
     """Generate SQL fragment for primary key constraint"""
     return f"PRIMARY KEY ({', '.join(self.columns)})"
 
@@ -265,7 +265,7 @@ class CheckConstraint:
     self.expression = expression
     self.constraint_name = constraint_name
     
-  def get_constraint_str(self) -> str:
+  def GetConstraintStr(self) -> str:
     """Generate SQL fragment for check constraint"""
     name_clause = f"CONSTRAINT {self.constraint_name} " if self.constraint_name else ""
     return f"{name_clause}CHECK ({self.expression})"
@@ -288,7 +288,7 @@ class Index:
     self.create_if_not_exists = create_if_not_exists
     self.name = name
   
-  def get_create_sql(self, table_name: str) -> str:
+  def GetCreateSQL(self, table_name: str) -> str:
     """Generate SQL statement to create index"""
     unique_clause = "UNIQUE " if self.unique else ""
     if_not_exists_clause = "IF NOT EXISTS " if self.create_if_not_exists else ""
@@ -301,7 +301,7 @@ class Index:
     
     return f"CREATE {unique_clause}INDEX {if_not_exists_clause}{self.name} ON {table_name}({columns_str});"
   
-  def get_drop_sql(self) -> str:
+  def GetDropSQL(self) -> str:
     """Generate SQL statement to drop index"""
     return f"DROP INDEX IF EXISTS {self.name};"
 
@@ -329,7 +329,7 @@ class SQLTable:
   def __repr__(self) -> str:
     return "<SQLTable: '{}' at {:016X}>".format(self.name, id(self))
   
-  def add_field(self, field: SQLField):
+  def AddField(self, field: SQLField):
     """Add field to table"""
     if field.name in self.field_name_dict:
       raise ValueError(f"Field '{field.name}' already exists in table '{self.name}'")
@@ -337,7 +337,7 @@ class SQLTable:
     self.fields.append(field)
     self.field_name_dict[field.name] = field
   
-  def set_primary_key(self, columns: typing.Union[str, typing.List[str]]):
+  def SetPrimaryKey(self, columns: typing.Union[str, typing.List[str]]):
     """Set table-level primary key constraint"""
     if isinstance(columns, str):
       columns = [columns]
@@ -349,7 +349,7 @@ class SQLTable:
     
     self.primary_key = PrimaryKeyConstraint(columns)
   
-  def add_foreign_key(self, 
+  def AddForeignKey(self, 
                       local_columns: typing.Union[str, typing.List[str]], 
                       ref_table: str, 
                       ref_columns: typing.Union[str, typing.List[str]], 
@@ -379,7 +379,7 @@ class SQLTable:
     )
     self.foreign_keys.append(fk)
   
-  def add_unique_constraint(self, 
+  def AddUniqueConstraint(self, 
                             columns: typing.Union[str, typing.List[str]], 
                             constraint_name: str = None):
     """Add unique constraint (table-level)"""
@@ -393,14 +393,14 @@ class SQLTable:
     uc = UniqueConstraint(columns, constraint_name)
     self.unique_constraints.append(uc)
   
-  def add_check_constraint(self, expression: str, constraint_name: str = None):
+  def AddCheckConstraint(self, expression: str, constraint_name: str = None):
     """Add check constraint (table-level)"""
     if not expression.strip():
       raise ValueError("Check constraint expression cannot be empty")
     cc = CheckConstraint(expression, constraint_name)
     self.check_constraints.append(cc)
 
-  def add_index(self, 
+  def AddIndex(self, 
                 columns: typing.Union[str, typing.List[str]], 
                 unique: bool = False, 
                 name: str = None):
@@ -424,15 +424,15 @@ class SQLTable:
       raise ValueError(f"Index name '{name}' already exists in table")
     self.indexes.append(index)
   
-  def get_create_index_sqls(self) -> typing.List[str]:
+  def GetCreateIndexSQLs(self) -> typing.List[str]:
     """Generate SQL statements to create all indexes"""
-    return [index.get_create_sql(self.name) for index in self.indexes]
+    return [index.GetCreateSQL(self.name) for index in self.indexes]
   
-  def get_drop_index_sqls(self) -> typing.List[str]:
+  def GetDropIndexSQLs(self) -> typing.List[str]:
     """Generate SQL statements to drop all indexes"""
-    return [index.get_drop_sql() for index in self.indexes]
+    return [index.GetDropSQL() for index in self.indexes]
   
-  def get_create_table_sql(self) -> str:
+  def GetCreateTableSQL(self) -> str:
     """Generate complete CREATE TABLE statement"""
     field_defs = []
     
@@ -449,26 +449,26 @@ class SQLTable:
     
     # Primary key constraint (if no auto-increment fields present)
     if self.primary_key and not auto_inc_fields:
-      constraints.append(self.primary_key.get_constraint_str())
+      constraints.append(self.primary_key.GetConstraintStr())
     
     # Unique constraints
     for uc in self.unique_constraints:
-      constraints.append(uc.get_constraint_str())
+      constraints.append(uc.GetConstraintStr())
     
     # Foreign key constraints
     for fk in self.foreign_keys:
-      constraints.append(fk.get_constraint_str())
+      constraints.append(fk.GetConstraintStr())
     
     # Check constraints
     for cc in self.check_constraints:
-      constraints.append(cc.get_constraint_str())
+      constraints.append(cc.GetConstraintStr())
     
     # Combine all definitions
     all_defs = field_defs + constraints
     inner = ',\n  '.join(all_defs)
     return f"CREATE TABLE IF NOT EXISTS {self.name} (\n  {inner}\n);"
   
-  def get_drop_table_sql(self) -> str:
+  def GetDropTableSQL(self) -> str:
     """Generate DROP TABLE statement"""
     return f"DROP TABLE IF EXISTS {self.name};"
   
@@ -515,7 +515,7 @@ class SQLTable:
       
     for field_name, type_str in table_def["fields"].items():
       # Parse field definition
-      params = SQLTable._parse_field_string(type_str)
+      params = SQLTable._ParseFieldString(type_str)
       field = SQLField(
         name=field_name,
         data_type_str=params["data_type"],
@@ -525,7 +525,7 @@ class SQLTable:
         default=params.get("default", None),
         check=params.get("check", None)
       )
-      table.add_field(field)
+      table.AddField(field)
     
     # Step 2: Apply table-level constraints
     constr_section = table_def.get("constraints", {})
@@ -533,12 +533,12 @@ class SQLTable:
     # Primary key
     pk = constr_section.get("primary_key")
     if pk:
-      table.set_primary_key(pk)
+      table.SetPrimaryKey(pk)
     
     # Foreign keys
     fks = constr_section.get("foreign_keys", [])
     for fk_def in fks:
-      table.add_foreign_key(
+      table.AddForeignKey(
         local_columns=fk_def["columns"],
         ref_table=fk_def["ref_table"],
         ref_columns=fk_def["ref_columns"],
@@ -551,14 +551,14 @@ class SQLTable:
     for uc_def in ucs:
       columns = uc_def["columns"]
       name = uc_def.get("name")
-      table.add_unique_constraint(columns, name)
+      table.AddUniqueConstraint(columns, name)
     
     # Check constraints
     ccs = constr_section.get("check_constraints", [])
     for cc_def in ccs:
       expression = cc_def["expression"]
       name = cc_def.get("name")
-      table.add_check_constraint(expression, name)
+      table.AddCheckConstraint(expression, name)
 
     # Add indexes
     indexes = table_def.get("indexes", [])
@@ -566,7 +566,7 @@ class SQLTable:
       columns = idx_def["columns"]
       unique = idx_def.get("unique", False)
       name = idx_def.get("name")
-      table.add_index(columns, unique, name)
+      table.AddIndex(columns, unique, name)
     
     # Step 3: Validate integrity
     # Check auto-increment fields have proper primary key setup
@@ -585,7 +585,7 @@ class SQLTable:
     return table
   
   @staticmethod
-  def _parse_field_string(type_str: str) -> dict:
+  def _ParseFieldString(type_str: str) -> dict:
     """
     Parse field definition string to extract parameters
     Example: "INTEGER PRIMARY KEY AUTOINCREMENT" or 
@@ -655,7 +655,7 @@ class SQLDatabase:
   def __repr__(self) -> str:
     return f"<SQLDatabase with {len(self.tables)} tables at {id(self):016X}>"
   
-  def add_table(self, table: SQLTable):
+  def AddTable(self, table: SQLTable):
     """Add table to database structure"""
     if table.name in self.table_name_dict:
       raise ValueError(f"Table '{table.name}' already exists in database")
@@ -667,11 +667,11 @@ class SQLDatabase:
     for fk in table.foreign_keys:
       self.foreign_key_graph[fk.ref_table].append(table.name)
   
-  def get_table(self, name: str) -> typing.Optional[SQLTable]:
+  def GetTable(self, name: str) -> typing.Optional[SQLTable]:
     """Get table structure object"""
     return self.table_name_dict.get(name)
   
-  def check_foreign_key_cycles(self) -> bool:
+  def CheckForeignKeyCycles(self) -> bool:
     """Check for circular foreign key dependencies (structural check only)"""
     visited = set()
     rec_stack = set()
@@ -696,10 +696,10 @@ class SQLDatabase:
           return True
     return False
   
-  def generate_sql_script(self) -> str:
+  def GenerateSQLScript(self) -> str:
     """Generate complete SQL script for database structure"""
     # Check for circular dependencies
-    if self.check_foreign_key_cycles():
+    if self.CheckForeignKeyCycles():
       raise RuntimeError("Foreign key cycle detected")
     
     # Build dependency graph (TableA depends on TableB = TableA references TableB)
@@ -725,7 +725,7 @@ class SQLDatabase:
       for dependent in dependency_graph.get(table.name, []):
         in_degree[dependent] -= 1
         if in_degree[dependent] == 0:
-          dep_table = self.get_table(dependent)
+          dep_table = self.GetTable(dependent)
           if dep_table:
             queue.append(dep_table)
     
@@ -738,11 +738,11 @@ class SQLDatabase:
     
     # Table creation statements
     for table in sorted_tables:
-      sql_script.append(table.get_create_table_sql())
+      sql_script.append(table.GetCreateTableSQL())
     
     # Index creation statements
     for table in sorted_tables:
-      for index_sql in table.get_create_index_sqls():
+      for index_sql in table.GetCreateIndexSQLs():
         sql_script.append(index_sql)
     
     return "\n\n".join(sql_script)
@@ -789,7 +789,7 @@ class SQLDatabase:
     # Create all table objects first
     for table_name, table_def in db_def.items():
       table = SQLTable.CreateFromDictV2(table_name, table_def)
-      db.add_table(table)
+      db.AddTable(table)
     
     # Verify referenced tables exist for foreign keys
     for table in db.tables:
@@ -847,7 +847,7 @@ class SQLDatabase:
     # Use new format creation method
     return SQLDatabase.CreateFromDictV2(new_db_def)
   
-  def get_table_dependencies(self) -> dict:
+  def GetTableDependencies(self) -> dict:
     """Get dependency relationships between tables"""
     dependencies = {}
     for table in self.tables:
@@ -857,14 +857,14 @@ class SQLDatabase:
       dependencies[table.name] = list(deps)
     return dependencies
   
-  def get_referencing_tables(self, table_name: str) -> list:
+  def GetReferencingTables(self, table_name: str) -> list:
     """Get tables that reference the specified table"""
     return self.foreign_key_graph.get(table_name, [])
   
-  def validate_structure(self):
+  def ValidateStructure(self):
     """Validate integrity of database structure"""
     # Check for foreign key cycles
-    if self.check_foreign_key_cycles():
+    if self.CheckForeignKeyCycles():
       raise ValueError("Foreign key cycle detected in database structure")
     
     # Verify all foreign key references exist
@@ -957,5 +957,5 @@ if __name__ == "__main__":
   # db = SQLDatabase.CreateFromDict(table_name_initiate_dict)
   # db = SQLDatabase.CreateFromDict(test_default_dict)
   db = SQLDatabase.CreateFromDictV2(test_v2_dict)
-  print(db.generate_sql_script())
+  print(db.GenerateSQLScript())
   pass

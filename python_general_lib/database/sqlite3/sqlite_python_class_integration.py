@@ -2,7 +2,7 @@
 from typing import Any, Dict, List, Optional, Type, Tuple, Union
 import datetime
 from python_general_lib.database.sqlite3.sqlite_structure import SQLField, SQLTable, SQLDatabase, ForeignKey, UniqueConstraint, Index, PrimaryKeyConstraint
-from python_general_lib.interface.json_serializable import IJsonSerializableWithDefault
+from python_general_lib.interface.json_serializable import AutoObjectToJsonHandler, AutoObjectFromJsonHander
 
 # 特殊类型映射
 TYPE_MAP = {
@@ -48,7 +48,7 @@ class Field:
     self.check = check
     self.foreign_key = foreign_key
   
-  def to_sql_field(self, name: str, field_type: Type) -> SQLField:
+  def ToSQLField(self, name: str, field_type: Type) -> SQLField:
     """将Python字段转换为SQLField对象"""
     # 获取SQL类型
     sql_type = TYPE_MAP.get(field_type, "TEXT")
@@ -82,7 +82,6 @@ class Field:
       check=self.check
     )
 
-
 def PySQLModel(cls: Type) -> Type:
   """
   模型装饰器
@@ -92,8 +91,6 @@ def PySQLModel(cls: Type) -> Type:
   2. 初始化模型元数据
   3. 自动设置默认表名
   """
-  # inherit from IJsonSerializableWithDefault
-  cls.__bases__ = (IJsonSerializableWithDefault,) + cls.__bases__
 
   # 初始化元数据
   if not hasattr(cls, '_sql_meta'):
@@ -137,7 +134,7 @@ def PySQLModel(cls: Type) -> Type:
   return cls
 
 
-def generate_sql_database(*models: Type) -> SQLDatabase:
+def GenerateSQLDatabase(*models: Type) -> SQLDatabase:
   """
   从多个模型类生成SQLDatabase结构
   
@@ -158,7 +155,7 @@ def generate_sql_database(*models: Type) -> SQLDatabase:
       raise TypeError(f"Class {model_class.__name__} is not decorated with @model")
     
     table_name = model_class._sql_meta['table_name']
-    table = _create_table_from_model(model_class)
+    table = _CreateTableFromModel(model_class)
     tables[table_name] = table
     
     # 收集外键信息
@@ -180,7 +177,7 @@ def generate_sql_database(*models: Type) -> SQLDatabase:
         raise ValueError(f"Referenced table '{ref_table_name}' not found")
       
       # 添加外键约束
-      table.add_foreign_key(
+      table.AddForeignKey(
         local_columns=field_name,
         ref_table=ref_table_name,
         ref_columns='id'  # 假设所有表都使用id作为主键
@@ -188,12 +185,12 @@ def generate_sql_database(*models: Type) -> SQLDatabase:
   
   # 添加所有表到数据库
   for table in tables.values():
-    db.add_table(table)
+    db.AddTable(table)
   
   return db
 
 
-def _create_table_from_model(model_class: Type) -> SQLTable:
+def _CreateTableFromModel(model_class: Type) -> SQLTable:
   """
   从单个模型类创建SQLTable
   
@@ -222,14 +219,14 @@ def _create_table_from_model(model_class: Type) -> SQLTable:
       field_def = Field()
     
     # 将Python类型转换为SQL类型
-    sql_field = field_def.to_sql_field(field_name, field_type)
+    sql_field = field_def.ToSQLField(field_name, field_type)
     
     # 添加字段到表
-    table.add_field(sql_field)
+    table.AddField(sql_field)
   
   # 设置主键（表级主键优先）
   if meta['primary_key']:
-    table.set_primary_key(meta['primary_key'])
+    table.SetPrimaryKey(meta['primary_key'])
   else:
     # 查找字段级主键定义
     primary_keys = []
@@ -238,15 +235,15 @@ def _create_table_from_model(model_class: Type) -> SQLTable:
         primary_keys.append(field_name)
     
     if primary_keys:
-      table.set_primary_key(primary_keys)
+      table.SetPrimaryKey(primary_keys)
   
   # 添加唯一约束
   for unique_fields in meta['unique_constraints']:
-    table.add_unique_constraint(unique_fields)
+    table.AddUniqueConstraint(unique_fields)
   
   # 添加外键约束（表级外键）
   for fk_def in meta['foreign_keys']:
-    table.add_foreign_key(
+    table.AddForeignKey(
       local_columns=fk_def['columns'],
       ref_table=fk_def['ref_table'],
       ref_columns=fk_def['ref_columns'],
@@ -256,7 +253,7 @@ def _create_table_from_model(model_class: Type) -> SQLTable:
   
   # 添加索引
   for idx_def in meta['indexes']:
-    table.add_index(
+    table.AddIndex(
       columns=idx_def['columns'],
       unique=idx_def.get('unique', False),
       name=idx_def.get('name', None)
@@ -264,7 +261,7 @@ def _create_table_from_model(model_class: Type) -> SQLTable:
   
   # 添加检查约束
   for check_def in meta['check_constraints']:
-    table.add_check_constraint(
+    table.AddCheckConstraint(
       expression=check_def['expression'],
       constraint_name=check_def.get('name')
     )
@@ -323,8 +320,8 @@ if __name__ == "__main__":
         {"expression": "LENGTH(title) > 0", "name": "chk_title_length"}
       ]
 
-  db = generate_sql_database(User, Post)
+  db = GenerateSQLDatabase(User, Post)
 
   # 生成SQL语句
-  sql_script = db.generate_sql_script()
+  sql_script = db.GenerateSQLScript()
   print(sql_script)

@@ -53,7 +53,7 @@ class SQLite3CRUD:
     """
     
     try:
-      cursor = self.connector.execute(sql, params=tuple(values))
+      cursor = self.connector.Execute(sql, params=tuple(values))
       return cursor.lastrowid
     except Exception as e:
       self.logger.error(f"Insert failed: {str(e)}")
@@ -108,7 +108,7 @@ class SQLite3CRUD:
     for i in range(0, len(batch_values), batch_size):
       batch = batch_values[i:i+batch_size]
       try:
-        self.connector.execute(sql, params=batch, many=True)
+        self.connector.Execute(sql, params=batch, many=True)
       except Exception as e:
         self.logger.error(f"Batch insert failed at offset {i}: {str(e)}")
         success = False
@@ -149,7 +149,7 @@ class SQLite3CRUD:
     """
     
     try:
-      cursor = self.connector.execute(sql, params=tuple(update_values) + params)
+      cursor = self.connector.Execute(sql, params=tuple(update_values) + params)
       return cursor.rowcount
     except Exception:
       return 0
@@ -175,7 +175,7 @@ class SQLite3CRUD:
     sql = f"DELETE FROM {table_name} WHERE {where}"
     
     try:
-      cursor = self.connector.execute(sql, params=params)
+      cursor = self.connector.Execute(sql, params=params)
       return cursor.rowcount
     except Exception:
       return 0
@@ -231,7 +231,7 @@ class SQLite3CRUD:
       sql += f" OFFSET {offset}"
     
     try:
-      cursor = self.connector.execute(sql, params=params)
+      cursor = self.connector.Execute(sql, params=params)
       column_names = [d[0] for d in cursor.description]
       return [dict(zip(column_names, row)) for row in cursor.fetchall()]
     except Exception:
@@ -282,7 +282,7 @@ class SQLite3CRUD:
       sql += f" WHERE {where}"
     
     try:
-      cursor = self.connector.execute(sql, params=params)
+      cursor = self.connector.Execute(sql, params=params)
       result = cursor.fetchone()
       return result[0] if result else 0
     except Exception:
@@ -307,7 +307,7 @@ class SQLite3CRUD:
       操作是否成功
     """
     try:
-      self.connector.execute(sql, params=params, many=many)
+      self.connector.Execute(sql, params=params, many=many)
       return True
     except Exception:
       return False

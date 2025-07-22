@@ -39,7 +39,7 @@ class SQLite3Connector:
     self.commit_when_leave = state["commit_when_leave"]
     self.logger = logging.getLogger("SQLConnector")
     self.conn = sqlite3.connect(self.path)
-    self._enable_foreign_keys()
+    self._EnableForeignKeys()
 
   def __enter__(self):
     self.Connect()
@@ -48,10 +48,10 @@ class SQLite3Connector:
   def __exit__(self, exc_type, exc_val, exc_tb):
     if exc_type:
       self.logger.error(f"Error occurred: {exc_val}")
-      self.rollback()
+      self.Rollback()
     elif self.commit_when_leave:
-      self.commit()
-    self.close()
+      self.Commit()
+    self.Close()
 
   def Connect(self, check_same_thread: bool = True, **kwargs) -> None:
     """Connect to database and enable foreign key constraints"""
@@ -62,21 +62,21 @@ class SQLite3Connector:
         detect_types=sqlite3.PARSE_DECLTYPES,
         **kwargs
       )
-      self._enable_foreign_keys()
+      self._EnableForeignKeys()
       
       # Initialize structure when creating new database
       if self.path != ":memory:" and not os.path.exists(self.path):
         self.logger.info(f"Creating new database: {self.path}")
-        self._initialize_new_database()
+        self._InitializeNewDatabase()
 
-  def _enable_foreign_keys(self):
+  def _EnableForeignKeys(self):
     """Enable foreign key constraint support"""
     if self.foreign_keys and self.conn is not None:
       self.conn.execute("PRAGMA foreign_keys = ON")
 
-  def _initialize_new_database(self):
+  def _InitializeNewDatabase(self):
     """Initialize structure for new database"""
-    script = self.structure.generate_sql_script()
+    script = self.structure.GenerateSQLScript()
     self.conn.executescript(script)
     self.conn.commit()
 
@@ -99,12 +99,12 @@ class SQLite3Connector:
     self.structure = SQLDatabase()
     
     for table_name in table_names:
-      table = self._recreate_table_structure(table_name)
-      self.structure.add_table(table)
+      table = self._RecreateTableStructure(table_name)
+      self.structure.AddTable(table)
       
     self.logger.info(f"Loaded {len(table_names)} table structures from database")
 
-  def _recreate_table_structure(self, table_name: str) -> SQLTable:
+  def _RecreateTableStructure(self, table_name: str) -> SQLTable:
     """Rebuild structure of a single table"""
     table = SQLTable(table_name)
     cursor = self.conn.cursor()
@@ -143,17 +143,17 @@ class SQLite3Connector:
         auto_increment=constraints["auto_increment"],
         default=default_value
       )
-      table.add_field(field)
+      table.AddField(field)
       
       # Set primary key
       if constraints["primary_key"]:
-        table.set_primary_key([name])
+        table.SetPrimaryKey([name])
     
     # Get foreign key constraints
     cursor.execute(f"PRAGMA foreign_key_list({table_name})")
     for row in cursor.fetchall():
       _, _, ref_table, from_col, to_col, on_delete, on_update = row
-      table.add_foreign_key(
+      table.AddForeignKey(
         local_columns=[from_col],
         ref_table=ref_table,
         ref_columns=[to_col],
@@ -177,25 +177,25 @@ class SQLite3Connector:
     # Check table existence
     for table in self.structure.tables:
       if table.name in existing_tables:
-        self._validate_table_structure(table)
+        self._ValidateTableStructure(table)
       else:
-        self._create_table(table)
+        self._CreateTable(table)
     
     # Handle deprecated tables
     deprecated_tables = existing_tables - {table.name for table in self.structure.tables}
     for table_name in deprecated_tables:
       self.logger.warning(f"Deprecated table detected: {table_name}")
 
-  def _validate_table_structure(self, table: SQLTable):
+  def _ValidateTableStructure(self, table: SQLTable):
     """Validate table structure and migrate"""
-    existing_fields = self._get_existing_fields(table.name)
+    existing_fields = self._GetExistingFields(table.name)
     existing_field_names = set(existing_fields.keys())
     
     # Add new fields
     for field in table.fields:
       if field.name not in existing_field_names:
         self.logger.info(f"Adding field {table.name}.{field.name}")
-        self._add_field_to_table(table.name, field)
+        self._AddFieldToTable(table.name, field)
     
     # Field type checking (SQLite doesn't support direct type modification)
     for field in table.fields:
@@ -213,7 +213,7 @@ class SQLite3Connector:
     
     # TODO: Handle field deletion and constraint changes (requires complex migration)
 
-  def _get_existing_fields(self, table_name: str) -> dict:
+  def _GetExistingFields(self, table_name: str) -> dict:
     """Get existing table field information"""
     cursor = self.conn.cursor()
     cursor.execute(f"PRAGMA table_info({table_name})")
@@ -222,7 +222,7 @@ class SQLite3Connector:
       for row in cursor.fetchall()
     }
 
-  def _add_field_to_table(self, table_name: str, field: SQLField):
+  def _AddFieldToTable(self, table_name: str, field: SQLField):
     """Add new field to table"""
     query = f"ALTER TABLE {table_name} ADD COLUMN {field.name} {field.GetCreateStr()}"
     self.conn.execute(query)
@@ -234,19 +234,19 @@ class SQLite3Connector:
       self.logger.warning("[AddTable] Database not connected")
       return
       
-    self.structure.add_table(table)
-    self._create_table(table)
+    self.structure.AddTable(table)
+    self._CreateTable(table)
     self.logger.info(f"Created new table: {table.name}")
 
-  def _create_table(self, table: SQLTable):
+  def _CreateTable(self, table: SQLTable):
     """Create table structure (supports full constraints)"""
     try:
       # Create table structure
-      self.conn.execute(table.get_create_table_sql())
-      self.logger.debug(f"Executed: {table.get_create_table_sql()}")
+      self.conn.execute(table.GetCreateTableSQL())
+      self.logger.debug(f"Executed: {table.GetCreateTableSQL()}")
       
       # Create indexes
-      for index_sql in table.get_create_index_sqls():
+      for index_sql in table.GetCreateIndexSQLs():
         self.conn.execute(index_sql)
         self.logger.debug(f"Executed: {index_sql}")
         
@@ -255,28 +255,28 @@ class SQLite3Connector:
       self.logger.error(f"Failed to create table {table.name}: {str(e)}")
       self.conn.rollback()
 
-  def commit(self):
+  def Commit(self):
     """Manually commit transaction"""
     if self.conn:
       self.conn.commit()
       self.logger.debug("Transaction committed")
 
-  def rollback(self):
+  def Rollback(self):
     """Rollback transaction"""
     if self.conn:
       self.conn.rollback()
       self.logger.debug("Transaction rolled back")
 
-  def close(self):
+  def Close(self):
     """Close database connection"""
     if self.conn:
       if self.commit_when_leave:
-        self.commit()
+        self.Commit()
       self.conn.close()
       self.conn = None
       self.logger.info(f"Database connection closed: {self.path}")
 
-  def execute(self, sql: str, params: tuple = None, many: bool = False):
+  def Execute(self, sql: str, params: tuple = None, many: bool = False):
     """Execute SQL query"""
     cursor = self.conn.cursor()
     try:
@@ -290,7 +290,7 @@ class SQLite3Connector:
       raise
 
   def __del__(self):
-    self.close()
+    self.Close()
 
 if __name__ == "__main__":
   table_name_initiate_dict = {
@@ -315,5 +315,5 @@ if __name__ == "__main__":
   conn.Connect()
   # conn.LoadStructureFromDatabase()
   conn.TableValidation()
-  conn.commit()
+  conn.Commit()
   pass
