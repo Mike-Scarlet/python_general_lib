@@ -1,10 +1,9 @@
-
 from typing import Any, Dict, List, Optional, Type, Tuple, Union
 import datetime
 from python_general_lib.database.sqlite3.sqlite_structure import SQLField, SQLTable, SQLDatabase, ForeignKey, UniqueConstraint, Index, PrimaryKeyConstraint
 from python_general_lib.interface.json_serializable import AutoObjectToJsonHandler, AutoObjectFromJsonHander
 
-# 特殊类型映射
+# SQL type mapping for Python types
 TYPE_MAP = {
   int: "INTEGER",
   str: "TEXT",
@@ -17,9 +16,9 @@ TYPE_MAP = {
 
 class Field:
   """
-  SQL字段描述类
+  SQL field definition class
   
-  功能：封装字段的所有属性和约束
+  Encapsulates all attributes and constraints for a database field
   """
   def __init__(self, 
                primary_key: bool = False, 
@@ -30,15 +29,15 @@ class Field:
                check: str = None,
                foreign_key: Type = None):
     """
-    初始化SQL字段描述
+    Initialize SQL field definition
     
-    :param primary_key: 是否是主键（字段级主键定义）
-    :param auto_increment: 是否自动增长
-    :param unique: 是否唯一（字段级唯一约束）
-    :param not_null: 是否不允许为null
-    :param default: 默认值
-    :param check: 检查约束表达式
-    :param foreign_key: 引用的模型类
+    :param primary_key: Whether this is a primary key (field-level primary key definition)
+    :param auto_increment: Whether to auto-increment
+    :param unique: Whether unique (field-level unique constraint)
+    :param not_null: Whether NOT NULL
+    :param default: Default value
+    :param check: Check constraint expression
+    :param foreign_key: Referenced model class
     """
     self.primary_key = primary_key
     self.auto_increment = auto_increment
@@ -49,14 +48,14 @@ class Field:
     self.foreign_key = foreign_key
   
   def ToSQLField(self, name: str, field_type: Type) -> SQLField:
-    """将Python字段转换为SQLField对象"""
-    # 获取SQL类型
+    """Convert Python field to SQLField object"""
+    # Get SQL type
     sql_type = TYPE_MAP.get(field_type, "TEXT")
     
-    # 处理默认值
+    # Process default value
     processed_default = self.default
     
-    # 特殊处理时间类型
+    # Handle datetime special cases
     if field_type in (datetime.date, datetime.datetime):
       if self.default == "CURRENT_TIMESTAMP":
         processed_default = "CURRENT_TIMESTAMP"
@@ -65,7 +64,7 @@ class Field:
       elif self.default == "CURRENT_TIME":
         processed_default = "CURRENT_TIME"
     
-    # 处理布尔值默认值
+    # Handle boolean default values
     elif field_type == bool:
       if self.default is True:
         processed_default = 1
@@ -76,7 +75,7 @@ class Field:
       name=name,
       data_type_str=sql_type,
       unique=self.unique,
-      not_null=self.not_null or self.primary_key,  # 主键自动非空
+      not_null=self.not_null or self.primary_key,  # Primary keys are automatically NOT NULL
       auto_increment=self.auto_increment,
       default=processed_default,
       check=self.check
@@ -84,50 +83,50 @@ class Field:
 
 def PySQLModel(cls: Type) -> Type:
   """
-  模型装饰器
+  Model decorator
   
-  功能：
-  1. 标记类为SQL模型
-  2. 初始化模型元数据
-  3. 自动设置默认表名
+  Functions:
+  1. Marks a class as an SQL model
+  2. Initializes model metadata
+  3. Sets default table name
   """
 
-  # 初始化元数据
+  # Initialize metadata
   if not hasattr(cls, '_sql_meta'):
     cls._sql_meta = {
-      'table_name': cls.__name__.lower(),  # 默认表名为类名小写
-      'primary_key': None,  # 表级主键约束
-      'unique_constraints': [],  # 表级唯一约束
-      'foreign_keys': [],  # 表级外键约束
-      'indexes': [],  # 索引定义
-      'check_constraints': []  # 表级检查约束
+      'table_name': cls.__name__.lower(),  # Default table name is lowercased class name
+      'primary_key': None,  # Table-level primary key constraint
+      'unique_constraints': [],  # Table-level unique constraints
+      'foreign_keys': [],  # Table-level foreign key constraints
+      'indexes': [],  # Index definitions
+      'check_constraints': []  # Table-level check constraints
     }
   
-  # 检查是否有SQLMeta类定义
+  # Check for SQLMeta class definition
   if hasattr(cls, 'SQLMeta'):
     meta = cls.SQLMeta
     
-    # 处理表名
+    # Process table name
     if hasattr(meta, 'table_name'):
       cls._sql_meta['table_name'] = meta.table_name
     
-    # 处理主键
+    # Process primary key
     if hasattr(meta, 'primary_key'):
       cls._sql_meta['primary_key'] = meta.primary_key
     
-    # 处理唯一约束
+    # Process unique constraints
     if hasattr(meta, 'unique_constraints'):
       cls._sql_meta['unique_constraints'] = meta.unique_constraints
     
-    # 处理外键约束
+    # Process foreign key constraints
     if hasattr(meta, 'foreign_keys'):
       cls._sql_meta['foreign_keys'] = meta.foreign_keys
     
-    # 处理索引
+    # Process indexes
     if hasattr(meta, 'indexes'):
       cls._sql_meta['indexes'] = meta.indexes
     
-    # 处理检查约束
+    # Process check constraints
     if hasattr(meta, 'check_constraints'):
       cls._sql_meta['check_constraints'] = meta.check_constraints
   
@@ -136,54 +135,54 @@ def PySQLModel(cls: Type) -> Type:
 
 def GenerateSQLDatabase(*models: Type) -> SQLDatabase:
   """
-  从多个模型类生成SQLDatabase结构
+  Generate SQLDatabase structure from multiple model classes
   
-  处理流程：
-  1. 创建所有表结构（不处理外键）
-  2. 建立外键关系
-  3. 添加所有表到数据库
+  Process:
+  1. Create all table structures (without foreign keys)
+  2. Establish foreign key relationships
+  3. Add all tables to the database
   """
-  # 创建数据库对象
+  # Create database object
   db = SQLDatabase()
-  tables = {}  # 表名到SQLTable的映射
-  foreign_key_refs = {}  # 表的外键引用信息
+  tables = {}  # Table name to SQLTable mapping
+  foreign_key_refs = {}  # Foreign key reference information
   
-  # 第一遍：创建所有表结构
+  # First pass: Create all table structures
   for model_class in models:
-    # 检查是否应用了装饰器
+    # Check if decorated
     if not hasattr(model_class, '_sql_meta'):
-      raise TypeError(f"Class {model_class.__name__} is not decorated with @model")
+      raise TypeError(f"Class {model_class.__name__} is not decorated with @PySQLModel")
     
     table_name = model_class._sql_meta['table_name']
     table = _CreateTableFromModel(model_class)
     tables[table_name] = table
     
-    # 收集外键信息
+    # Collect foreign key information
     foreign_key_refs[table_name] = {}
     for field_name, field_def in model_class.__dict__.items():
       if isinstance(field_def, Field) and field_def.foreign_key:
         foreign_key_refs[table_name][field_name] = field_def.foreign_key
   
-  # 第二遍：建立外键关系
+  # Second pass: Establish foreign key relationships
   for table_name, fk_refs in foreign_key_refs.items():
     table = tables[table_name]
     
     for field_name, ref_model in fk_refs.items():
-      # 获取引用表的名称
+      # Get referenced table name
       ref_table_name = ref_model._sql_meta['table_name']
       
-      # 确保引用表已创建
+      # Ensure referenced table exists
       if ref_table_name not in tables:
         raise ValueError(f"Referenced table '{ref_table_name}' not found")
       
-      # 添加外键约束
+      # Add foreign key constraint
       table.AddForeignKey(
         local_columns=field_name,
         ref_table=ref_table_name,
-        ref_columns='id'  # 假设所有表都使用id作为主键
+        ref_columns='id'  # Assumes all tables use 'id' as primary key
       )
   
-  # 添加所有表到数据库
+  # Add all tables to database
   for table in tables.values():
     db.AddTable(table)
   
@@ -192,43 +191,43 @@ def GenerateSQLDatabase(*models: Type) -> SQLDatabase:
 
 def _CreateTableFromModel(model_class: Type) -> SQLTable:
   """
-  从单个模型类创建SQLTable
+  Create SQLTable from a single model class
   
-  处理步骤：
-  1. 解析字段定义
-  2. 设置主键（表级或字段级）
-  3. 添加约束和索引
+  Steps:
+  1. Parse field definitions
+  2. Set primary key (table-level or field-level)
+  3. Add constraints and indexes
   """
   meta = model_class._sql_meta
   table = SQLTable(meta['table_name'])
   
-  # 获取类的所有注解
+  # Get all class annotations
   annotations = model_class.__annotations__
   
-  # 添加字段
+  # Add fields
   for field_name, field_type in annotations.items():
-    # 跳过特殊字段
+    # Skip special fields
     if field_name.startswith('__'):
       continue
     
-    # 获取字段定义
+    # Get field definition
     field_def = getattr(model_class, field_name, None)
     
-    # 如果不是Field实例，创建一个默认的
+    # If not Field instance, create a default one
     if not isinstance(field_def, Field):
       field_def = Field()
     
-    # 将Python类型转换为SQL类型
+    # Convert Python type to SQL type
     sql_field = field_def.ToSQLField(field_name, field_type)
     
-    # 添加字段到表
+    # Add field to table
     table.AddField(sql_field)
   
-  # 设置主键（表级主键优先）
+  # Set primary key (table-level primary key has priority)
   if meta['primary_key']:
     table.SetPrimaryKey(meta['primary_key'])
   else:
-    # 查找字段级主键定义
+    # Find field-level primary keys
     primary_keys = []
     for field_name, field_def in model_class.__dict__.items():
       if isinstance(field_def, Field) and field_def.primary_key:
@@ -237,11 +236,11 @@ def _CreateTableFromModel(model_class: Type) -> SQLTable:
     if primary_keys:
       table.SetPrimaryKey(primary_keys)
   
-  # 添加唯一约束
+  # Add unique constraints
   for unique_fields in meta['unique_constraints']:
     table.AddUniqueConstraint(unique_fields)
   
-  # 添加外键约束（表级外键）
+  # Add foreign key constraints (table-level)
   for fk_def in meta['foreign_keys']:
     table.AddForeignKey(
       local_columns=fk_def['columns'],
@@ -251,7 +250,7 @@ def _CreateTableFromModel(model_class: Type) -> SQLTable:
       on_update=fk_def.get('on_update')
     )
   
-  # 添加索引
+  # Add indexes
   for idx_def in meta['indexes']:
     table.AddIndex(
       columns=idx_def['columns'],
@@ -259,7 +258,7 @@ def _CreateTableFromModel(model_class: Type) -> SQLTable:
       name=idx_def.get('name', None)
     )
   
-  # 添加检查约束
+  # Add check constraints
   for check_def in meta['check_constraints']:
     table.AddCheckConstraint(
       expression=check_def['expression'],
@@ -271,17 +270,17 @@ def _CreateTableFromModel(model_class: Type) -> SQLTable:
 if __name__ == "__main__":
   @PySQLModel
   class User:
-    """用户表模型"""
-    # 字段定义
+    """User table model"""
+    # Field definitions
     id: int = Field(primary_key=True, auto_increment=True)
     username: str = Field(unique=True, not_null=True)
     email: str = Field(not_null=True)
     created_at: datetime.datetime = Field(default="CURRENT_TIMESTAMP")
     is_active: bool = Field(default=True)
     
-    # 表级定义
+    # Table-level definitions
     class SQLMeta:
-      table_name = "app_users"  # 自定义表名
+      table_name = "app_users"  # Custom table name
       indexes = [
         {"columns": ["email"], "unique": True, "name": "idx_user_email"},
         {"columns": ["username"], "name": "idx_user_username"}
@@ -292,23 +291,23 @@ if __name__ == "__main__":
 
   @PySQLModel
   class Post:
-    """帖子表模型"""
-    # 字段定义
+    """Post table model"""
+    # Field definitions
     id: int = Field(primary_key=True, auto_increment=True)
     title: str = Field(not_null=True)
     content: str
     created_at: datetime.datetime = Field(default="CURRENT_TIMESTAMP")
-    author_id: int = Field(foreign_key=User)  # 字段级外键
+    author_id: int = Field(foreign_key=User)  # Field-level foreign key
     
-    # 表级定义
+    # Table-level definitions
     class SQLMeta:
-      primary_key = ["id"]  # 显式表级主键定义
-      unique_constraints = [["title", "author_id"]]  # 复合唯一约束
+      primary_key = ["id"]  # Explicit table-level primary key
+      unique_constraints = [["title", "author_id"]]  # Composite unique constraint
       indexes = [
         {"columns": ["created_at"], "name": "idx_post_created"},
         {"columns": ["title", "created_at"], "name": "idx_post_title_created"}
       ]
-      foreign_keys = [  # 表级外键定义（支持多字段外键）
+      foreign_keys = [  # Table-level foreign keys (supports multi-field)
         {
           "columns": ["author_id"],
           "ref_table": "app_users",
@@ -322,6 +321,6 @@ if __name__ == "__main__":
 
   db = GenerateSQLDatabase(User, Post)
 
-  # 生成SQL语句
+  # Generate SQL script
   sql_script = db.GenerateSQLScript()
   print(sql_script)

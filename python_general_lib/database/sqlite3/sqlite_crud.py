@@ -5,21 +5,21 @@ from python_general_lib.database.sqlite3.sqlite_connector import SQLite3Connecto
 class SQLite3CRUD:
   def __init__(self, sqlite_connector: SQLite3Connector):
     """
-    精简高效的 SQLite 操作库
+    Lightweight and efficient SQLite operations library
     
-    特性：
-    1. 极致性能优化，无任何冗余验证
-    2. 完整的 CRUD 操作支持
-    3. 高效的批处理操作
-    4. 简洁易用的 API 设计
+    Features:
+    1. Optimized for maximum performance with no redundant verifications
+    2. Full CRUD operation support
+    3. Efficient batch operations
+    4. Clean and easy-to-use API design
     
     Args:
-      sqlite_connector: SQLite 连接器实例
+      sqlite_connector: SQLite connector instance
     """
     self.connector = sqlite_connector
     self.logger = logging.getLogger("SQLiteRepository")
   
-  # === 插入操作 ===
+  # === Insert Operations ===
   def Insert(
     self, 
     table_name: str, 
@@ -27,15 +27,15 @@ class SQLite3CRUD:
     on_conflict: str = ""
   ) -> Optional[int]:
     """
-    插入单条记录
+    Insert a single record
     
     Args:
-      table_name: 目标表名
-      data: 要插入的数据字典 {列名: 值}
-      on_conflict: ON CONFLICT 策略 (如 "OR IGNORE", "OR REPLACE")
+      table_name: Target table name
+      data: Data dictionary to insert {column: value}
+      on_conflict: ON CONFLICT strategy (e.g., "OR IGNORE", "OR REPLACE")
     
     Returns:
-      最后插入的行 ID (如果有自增主键)
+      Last inserted row ID (if using auto-increment primary key)
     """
     columns = []
     values = []
@@ -67,27 +67,27 @@ class SQLite3CRUD:
     batch_size: int = 1000
   ) -> bool:
     """
-    批量插入多条记录
+    Batch insert multiple records
     
     Args:
-      table_name: 目标表名
-      records: 要插入的记录列表
-      on_conflict: ON CONFLICT 策略
-      batch_size: 每批次处理的记录数量
+      table_name: Target table name
+      records: List of records to insert
+      on_conflict: ON CONFLICT strategy
+      batch_size: Number of records per batch
     
     Returns:
-      操作是否成功
+      Operation success status
     """
     if not records:
       return True
       
-    # 获取所有列名
+    # Get all column names
     all_columns = set()
     for record in records:
       all_columns.update(record.keys())
     columns = list(all_columns)
     
-    # 准备批处理 SQL
+    # Prepare batch SQL
     placeholders = ", ".join(["?"] * len(columns))
     sql = f"""
       INSERT {on_conflict} INTO {table_name}
@@ -95,7 +95,7 @@ class SQLite3CRUD:
       VALUES ({placeholders})
     """
     
-    # 准备批处理数据
+    # Prepare batch data
     batch_values = []
     for record in records:
       row_values = []
@@ -103,7 +103,7 @@ class SQLite3CRUD:
         row_values.append(record.get(col))
       batch_values.append(tuple(row_values))
     
-    # 分批次插入
+    # Batch processing
     success = True
     for i in range(0, len(batch_values), batch_size):
       batch = batch_values[i:i+batch_size]
@@ -115,7 +115,7 @@ class SQLite3CRUD:
     
     return success
   
-  # === 更新操作 ===
+  # === Update Operations ===
   def Update(
     self, 
     table_name: str, 
@@ -124,16 +124,16 @@ class SQLite3CRUD:
     params: Tuple = ()
   ) -> int:
     """
-    更新记录
+    Update records
     
     Args:
-      table_name: 目标表名
-      updates: 要更新的字段 {列名: 新值}
-      where: WHERE 条件语句 (使用 ? 占位符)
-      params: WHERE 条件参数值
+      table_name: Target table name
+      updates: Fields to update {column: new_value}
+      where: WHERE clause (use ? placeholders)
+      params: WHERE clause parameter values
     
     Returns:
-      受影响的行数
+      Number of affected rows
     """
     update_parts = []
     update_values = []
@@ -154,7 +154,7 @@ class SQLite3CRUD:
     except Exception:
       return 0
   
-  # === 删除操作 ===
+  # === Delete Operations ===
   def Delete(
     self, 
     table_name: str, 
@@ -162,15 +162,15 @@ class SQLite3CRUD:
     params: Tuple = ()
   ) -> int:
     """
-    删除记录
+    Delete records
     
     Args:
-      table_name: 目标表名
-      where: WHERE 条件语句 (使用 ? 占位符)
-      params: WHERE 条件参数值
+      table_name: Target table name
+      where: WHERE clause (use ? placeholders)
+      params: WHERE clause parameter values
     
     Returns:
-      受影响的行数
+      Number of affected rows
     """
     sql = f"DELETE FROM {table_name} WHERE {where}"
     
@@ -180,7 +180,7 @@ class SQLite3CRUD:
     except Exception:
       return 0
   
-  # === 查询操作 ===
+  # === Query Operations ===
   def Query(
     self,
     table_name: str,
@@ -194,21 +194,21 @@ class SQLite3CRUD:
     offset: Optional[int] = None
   ) -> List[Dict[str, Any]]:
     """
-    通用查询方法
+    Generic query method
     
     Args:
-      table_name: 目标表名
-      columns: 要查询的列 (可以是 *、单个列名或列名列表)
-      where: WHERE 条件语句 (使用 ? 占位符)
-      params: WHERE 条件参数值
-      joins: JOIN 语句
-      group_by: GROUP BY 语句
-      order_by: ORDER BY 语句
-      limit: 限制返回行数
-      offset: 偏移量
+      table_name: Target table name
+      columns: Columns to select (*, column name, or list of names)
+      where: WHERE clause (use ? placeholders)
+      params: WHERE clause parameter values
+      joins: JOIN statements
+      group_by: GROUP BY statement
+      order_by: ORDER BY statement
+      limit: Row limit
+      offset: Row offset
     
     Returns:
-      查询结果字典列表
+      List of result dictionaries
     """
     if isinstance(columns, list):
       columns_str = ", ".join(columns)
@@ -245,21 +245,21 @@ class SQLite3CRUD:
     params: Tuple = ()
   ) -> Optional[Dict[str, Any]]:
     """
-    查询单条记录
+    Query a single record
     
     Args:
-      table_name: 目标表名
-      columns: 要查询的列
-      where: WHERE 条件语句
-      params: WHERE 条件参数值
+      table_name: Target table name
+      columns: Columns to select
+      where: WHERE clause
+      params: WHERE clause parameter values
     
     Returns:
-      单条记录字典 (如果没有记录则返回 None)
+      Single record dictionary or None
     """
     results = self.Query(table_name, columns, where, params, limit=1)
     return results[0] if results else None
   
-  # === 聚合操作 ===
+  # === Aggregate Operations ===
   def Count(
     self, 
     table_name: str, 
@@ -267,15 +267,15 @@ class SQLite3CRUD:
     params: Tuple = ()
   ) -> int:
     """
-    获取记录数量
+    Count records
     
     Args:
-      table_name: 目标表名
-      where: WHERE 条件语句
-      params: WHERE 条件参数值
+      table_name: Target table name
+      where: WHERE clause
+      params: WHERE clause parameter values
     
     Returns:
-      符合条件的记录数量
+      Number of matching records
     """
     sql = f"SELECT COUNT(*) FROM {table_name}"
     if where:
@@ -288,7 +288,7 @@ class SQLite3CRUD:
     except Exception:
       return 0
   
-  # === 原始 SQL 操作 ===
+  # === Raw SQL Operations ===
   def Execute(
     self, 
     sql: str, 
@@ -296,15 +296,15 @@ class SQLite3CRUD:
     many: bool = False
   ) -> bool:
     """
-    执行原始 SQL 语句
+    Execute raw SQL
     
     Args:
-      sql: SQL 语句
-      params: 参数值 (单条或批处理)
-      many: 是否为批处理模式
+      sql: SQL statement
+      params: Parameter values (single or batch)
+      many: Batch operation mode
     
     Returns:
-      操作是否成功
+      Operation success status
     """
     try:
       self.connector.Execute(sql, params=params, many=many)
