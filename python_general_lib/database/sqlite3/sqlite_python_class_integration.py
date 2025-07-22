@@ -106,29 +106,27 @@ def PySQLModel(cls: Type) -> Type:
   if hasattr(cls, 'SQLMeta'):
     meta = cls.SQLMeta
     
-    # Process table name
-    if hasattr(meta, 'table_name'):
-      cls._sql_meta['table_name'] = meta.table_name
-    
-    # Process primary key
-    if hasattr(meta, 'primary_key'):
-      cls._sql_meta['primary_key'] = meta.primary_key
-    
-    # Process unique constraints
-    if hasattr(meta, 'unique_constraints'):
-      cls._sql_meta['unique_constraints'] = meta.unique_constraints
-    
-    # Process foreign key constraints
-    if hasattr(meta, 'foreign_keys'):
-      cls._sql_meta['foreign_keys'] = meta.foreign_keys
-    
-    # Process indexes
-    if hasattr(meta, 'indexes'):
-      cls._sql_meta['indexes'] = meta.indexes
-    
-    # Process check constraints
-    if hasattr(meta, 'check_constraints'):
-      cls._sql_meta['check_constraints'] = meta.check_constraints
+    process_keys = [
+      "table_name",
+      "primary_key",
+      "unique_constraints",
+      "foreign_keys",
+      "indexes",
+      "check_constraints",
+    ]
+    for key in process_keys:
+      if hasattr(meta, key):
+        cls._sql_meta[key] = getattr(meta, key)
+
+  if not hasattr(cls, 'ToJson'):
+    def to_json(self) -> Union[dict, list]:
+      return AutoObjectToJsonHandler(self)    
+    cls.ToJson = to_json
+
+  if not hasattr(cls, 'FromJson'):
+    def from_json(self, json_data: Union[dict, list]) -> None:
+      return AutoObjectFromJsonHander(self, json_data, allow_not_defined_attr=True)
+    cls.FromJson = from_json
   
   return cls
 
