@@ -143,7 +143,6 @@ def GenerateSQLDatabase(*models: Type) -> SQLDatabase:
   # Create database object
   db = SQLDatabase()
   tables = {}  # Table name to SQLTable mapping
-  foreign_key_refs = {}  # Foreign key reference information
   
   # First pass: Create all table structures
   for model_class in models:
@@ -154,31 +153,6 @@ def GenerateSQLDatabase(*models: Type) -> SQLDatabase:
     table_name = model_class._sql_meta['table_name']
     table = _CreateTableFromModel(model_class)
     tables[table_name] = table
-    
-    # Collect foreign key information
-    foreign_key_refs[table_name] = {}
-    for field_name, field_def in model_class.__dict__.items():
-      if isinstance(field_def, Field) and field_def.foreign_key:
-        foreign_key_refs[table_name][field_name] = field_def.foreign_key
-  
-  # Second pass: Establish foreign key relationships
-  for table_name, fk_refs in foreign_key_refs.items():
-    table = tables[table_name]
-    
-    for field_name, ref_model in fk_refs.items():
-      # Get referenced table name
-      ref_table_name = ref_model._sql_meta['table_name']
-      
-      # Ensure referenced table exists
-      if ref_table_name not in tables:
-        raise ValueError(f"Referenced table '{ref_table_name}' not found")
-      
-      # Add foreign key constraint
-      table.AddForeignKey(
-        local_columns=field_name,
-        ref_table=ref_table_name,
-        ref_columns='id'  # Assumes all tables use 'id' as primary key
-      )
   
   # Add all tables to database
   for table in tables.values():
