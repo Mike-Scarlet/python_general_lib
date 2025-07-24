@@ -81,54 +81,97 @@ class Field:
       check=self.check
     )
 
-def PySQLModel(cls: Type) -> Type:
+def PySQLModel(cls: Type = None, *, initialize_fields: bool = False) -> Type:
   """
-  Model decorator
+  Model decorator with field initialization option
   
   Functions:
   1. Marks a class as an SQL model
   2. Initializes model metadata
   3. Sets default table name
+  4. Optionally initializes fields on instantiation
+  
+  Args:
+    initialize_fields: If True, initialize all fields with default values (or None) on instantiation
   """
-
-  # Initialize metadata
-  if not hasattr(cls, '_sql_meta'):
-    cls._sql_meta = {
-      'table_name': cls.__name__.lower(),  # Default table name is lowercased class name
-      'primary_key': None,  # Table-level primary key constraint
-      'unique_constraints': [],  # Table-level unique constraints
-      'foreign_keys': [],  # Table-level foreign key constraints
-      'indexes': [],  # Index definitions
-      'check_constraints': []  # Table-level check constraints
-    }
-  
-  # Check for SQLMeta class definition
-  if hasattr(cls, 'SQLMeta'):
-    meta = cls.SQLMeta
+  def decorator(cls: Type) -> Type:
+    # Initialize metadata
+    if not hasattr(cls, '_sql_meta'):
+      cls._sql_meta = {
+        'table_name': cls.__name__,  # Default table name is lowercased class name
+        'primary_key': None,  # Table-level primary key constraint
+        'unique_constraints': [],  # Table-level unique constraints
+        'foreign_keys': [],  # Table-level foreign key constraints
+        'indexes': [],  # Index definitions
+        'check_constraints': []  # Table-level check constraints
+      }
     
-    process_keys = [
-      "table_name",
-      "primary_key",
-      "unique_constraints",
-      "foreign_keys",
-      "indexes",
-      "check_constraints",
-    ]
-    for key in process_keys:
-      if hasattr(meta, key):
-        cls._sql_meta[key] = getattr(meta, key)
+    # Check for SQLMeta class definition
+    if hasattr(cls, 'SQLMeta'):
+      meta = cls.SQLMeta
+      
+      process_keys = [
+        "table_name",
+        "primary_key",
+        "unique_constraints",
+        "foreign_keys",
+        "indexes",
+        "check_constraints",
+      ]
+      for key in process_keys:
+        if hasattr(meta, key):
+          cls._sql_meta[key] = getattr(meta, key)
 
-  if not hasattr(cls, 'ToJson'):
-    def to_json(self) -> Union[dict, list]:
-      return AutoObjectToJsonHandler(self)    
-    cls.ToJson = to_json
+    # Add JSON serialization methods if not defined
+    if not hasattr(cls, 'ToJson'):
+      def to_json(self) -> Union[dict, list]:
+        return AutoObjectToJsonHandler(self)  
+      cls.ToJson = to_json
 
-  if not hasattr(cls, 'FromJson'):
-    def from_json(self, json_data: Union[dict, list]) -> None:
-      return AutoObjectFromJsonHander(self, json_data, allow_not_defined_attr=True)
-    cls.FromJson = from_json
+    if not hasattr(cls, 'FromJson'):
+      def from_json(self, json_data: Union[dict, list]) -> None:
+        return AutoObjectFromJsonHander(self, json_data, allow_not_defined_attr=True)
+      cls.FromJson = from_json
+    
+    # Add field initialization if requested
+    if initialize_fields:
+      original_init = cls.__init__ if hasattr(cls, '__init__') else None
+      
+      def new_init(self, *args, **kwargs):
+        # Initialize all fields with default values or None
+        annotations = cls.__annotations__
+        for field_name, field_type in annotations.items():
+          if field_name.startswith('__'):
+            continue
+          
+          # Skip if already set by arguments
+          if field_name in kwargs:
+            continue
+          
+          # Get field definition if exists
+          field_def = getattr(cls, field_name, None)
+          default_value = None
+          
+          if isinstance(field_def, Field):
+            # Use field's default value if set
+            if field_def.default is not None:
+              default_value = field_def.default
+          
+          setattr(self, field_name, default_value)
+        
+        # Call original __init__ if exists
+        if original_init:
+          original_init(self, *args, **kwargs)
+      
+      cls.__init__ = new_init
+    
+    return cls
   
-  return cls
+  # Handle decorator with or without parentheses
+  if cls is None:
+    return decorator
+  else:
+    return decorator(cls)
 
 
 def GenerateSQLDatabase(*models: Type) -> SQLDatabase:

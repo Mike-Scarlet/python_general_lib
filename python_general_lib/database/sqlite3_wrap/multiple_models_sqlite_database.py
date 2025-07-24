@@ -58,7 +58,7 @@ class MultipleModelsSQLiteDatabase:
         self._crud = SQLite3CRUD(self._connector)
         self.logger.info(f"Database initialized at {self.db_path} with SQLite version {sqlite_version_info}")
     
-    def InsertRecord(self, item: IJsonSerializable, on_conflict: str = "") -> typing.Optional[int]:
+    def InsertRecord(self, item: IJsonSerializable, on_conflict: str = "", update_primary_key: bool = False) -> typing.Optional[int]:
         """
         插入记录
         
@@ -71,7 +71,23 @@ class MultipleModelsSQLiteDatabase:
         """
         table_name = self.class_to_table_name_dict[type(item)]
         data = item.ToJson()
-        return self._crud.Insert(table_name, data, on_conflict)
+        row_id = self._crud.Insert(table_name, data, on_conflict)
+        
+        # 更新自增ID到对象
+        if update_primary_key and row_id is not None:
+            cls = type(item)
+            primary_keys = self._get_primary_keys(cls)
+            
+            # 如果只有一个自增主键，则更新ID
+            if len(primary_keys) == 1:
+                pk_field = primary_keys[0]
+                field_def = getattr(cls, pk_field, None)
+                
+                # 检查是否是自增字段
+                if isinstance(field_def, Field) and field_def.auto_increment:
+                    setattr(item, pk_field, row_id)
+        
+        return row_id
     
     def InsertBatch(self, items: typing.List[IJsonSerializable], on_conflict: str = "", 
                     batch_size: int = 1000) -> bool:
@@ -104,6 +120,10 @@ class MultipleModelsSQLiteDatabase:
             if not self._crud.InsertBatch(table_name, records, on_conflict, batch_size):
                 success = False
                 self.logger.error(f"Batch insert failed for table {table_name}")
+        
+        # 批量插入后无法获取每个对象的ID，需要单独查询更新
+        # 对于自增ID，批量插入后需要单独更新对象
+        # 这里不自动更新，需要调用方手动处理
         
         return success
     
@@ -327,7 +347,7 @@ class MultipleModelsSQLiteDatabase:
 if __name__ == "__main__":
     import datetime
     # 测试示例
-    @PySQLModel
+    @PySQLModel(initialize_fields=True)
     class TestClassA:
         id: int = Field(primary_key=True, auto_increment=True)
         name: str = Field(not_null=True)
@@ -347,24 +367,27 @@ if __name__ == "__main__":
     item_a = TestClassA()
     item_a.name = "Test Item"
     item_a.value = 42.0
-    db.InsertRecord(item_a)
+    inserted_id = db.InsertRecord(item_a, update_primary_key=True)
+    print(f"Inserted item_a with id: {item_a.id}")  # 现在应该打印出非零ID
     
     item_b = TestClassB()
     item_b.description = "Test Description"
-    db.InsertRecord(item_b)
+    inserted_id = db.InsertRecord(item_b, update_primary_key=True)
+    print(f"Inserted item_b with id: {item_b.id}")  # 现在应该打印出非零ID
     
     # 查询记录
-    # TODO: insert record 之后不会更新id
     items_a = db.QueryRecords(TestClassA)
     print(f"Found {len(items_a)} items in TestClassA")
+    for item in items_a:
+        print(f"Item ID: {item.id}, Name: {item.name}, Value: {item.value}")
     
     # 更新记录
     if items_a:
         items_a[0].value = 99.0
         db.RecordFieldChanged(items_a[0], ["value"])
     
-    # # 删除记录
-    # db.RemoveRecord(item_b)
+    # 删除记录
+    db.RemoveRecord(item_b)
     
     # 关闭数据库
     db.Close()
