@@ -1,7 +1,7 @@
 from sqlite3 import sqlite_version_info
-from python_general_lib.database.sqlite3.sqlite_python_class_integration import PySQLModel, GenerateSQLDatabase, SQLField
-from python_general_lib.database.sqlite3.sqlite_connector import SQLite3Connector
-from python_general_lib.database.sqlite3.sqlite_crud import SQLite3CRUD
+from python_general_lib.database.sqlite3_wrap.sqlite_python_class_integration import PySQLModel, GenerateSQLDatabase, Field
+from python_general_lib.database.sqlite3_wrap.sqlite_connector import SQLite3Connector
+from python_general_lib.database.sqlite3_wrap.sqlite_crud import SQLite3CRUD
 from python_general_lib.interface.json_serializable import IJsonSerializable
 import typing
 import logging
@@ -314,7 +314,7 @@ class MultipleModelsSQLiteDatabase:
         # 检查字段定义
         pks = []
         for field_name, field_def in model_class.__dict__.items():
-            if isinstance(field_def, SQLField) and field_def.primary_key:
+            if isinstance(field_def, Field) and field_def.primary_key:
                 pks.append(field_name)
         return pks
     
@@ -329,15 +329,15 @@ if __name__ == "__main__":
     # 测试示例
     @PySQLModel
     class TestClassA:
-        id: int = SQLField(primary_key=True, auto_increment=True)
-        name: str = SQLField(not_null=True)
-        value: float = SQLField(default=0.0)
+        id: int = Field(primary_key=True, auto_increment=True)
+        name: str = Field(not_null=True)
+        value: float = Field(default=0.0)
     
     @PySQLModel
     class TestClassB:
-        id: int = SQLField(primary_key=True, auto_increment=True)
-        description: str = SQLField(not_null=True)
-        timestamp: datetime.datetime = SQLField(default="CURRENT_TIMESTAMP")
+        id: int = Field(primary_key=True, auto_increment=True)
+        description: str = Field(not_null=True)
+        timestamp: datetime.datetime = Field(default="CURRENT_TIMESTAMP")
     
     # 初始化数据库
     db = MultipleModelsSQLiteDatabase("test.db", [TestClassA, TestClassB])
@@ -354,6 +354,7 @@ if __name__ == "__main__":
     db.InsertRecord(item_b)
     
     # 查询记录
+    # TODO: insert record 之后不会更新id
     items_a = db.QueryRecords(TestClassA)
     print(f"Found {len(items_a)} items in TestClassA")
     
@@ -362,8 +363,8 @@ if __name__ == "__main__":
         items_a[0].value = 99.0
         db.RecordFieldChanged(items_a[0], ["value"])
     
-    # 删除记录
-    db.RemoveRecord(item_b)
+    # # 删除记录
+    # db.RemoveRecord(item_b)
     
     # 关闭数据库
     db.Close()

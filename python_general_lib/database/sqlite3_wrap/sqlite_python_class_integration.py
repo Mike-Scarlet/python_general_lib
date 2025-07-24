@@ -1,6 +1,6 @@
 from typing import Any, Dict, List, Optional, Type, Tuple, Union
 import datetime
-from python_general_lib.database.sqlite3.sqlite_structure import SQLField, SQLTable, SQLDatabase, ForeignKey, UniqueConstraint, Index, PrimaryKeyConstraint
+from python_general_lib.database.sqlite3_wrap.sqlite_structure import SQLField, SQLTable, SQLDatabase, ForeignKey, UniqueConstraint, Index, PrimaryKeyConstraint
 from python_general_lib.interface.json_serializable import AutoObjectToJsonHandler, AutoObjectFromJsonHander
 
 # SQL type mapping for Python types

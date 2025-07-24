@@ -46,7 +46,6 @@ class IJsonSerializableWithDefault:
 
 def AutoObjectToJsonHandler(obj):
   obj_class = type(obj)
-  all_class_props = dir(obj_class)
 
   all_sub_props = dir(obj)
   name_value_dict = {}
@@ -54,10 +53,9 @@ def AutoObjectToJsonHandler(obj):
     if prop_name.startswith("__") and prop_name.endswith("__"):
       continue
 
-    if prop_name in all_class_props:
-      continue   # class member
-
     item = getattr(obj, prop_name)
+    if hasattr(obj_class, prop_name) and getattr(obj_class, prop_name) == item:
+      continue
     if isinstance(item, IJsonSerializable) or isinstance(item, IJsonSerializableWithDefault):
       item = item.ToJson()
     else:

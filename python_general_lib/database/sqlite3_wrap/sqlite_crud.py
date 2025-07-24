@@ -1,6 +1,6 @@
 import logging
 from typing import Any, Dict, List, Tuple, Union, Optional
-from python_general_lib.database.sqlite3.sqlite_connector import SQLite3Connector
+from python_general_lib.database.sqlite3_wrap.sqlite_connector import SQLite3Connector
 
 class SQLite3CRUD:
   def __init__(self, sqlite_connector: SQLite3Connector):

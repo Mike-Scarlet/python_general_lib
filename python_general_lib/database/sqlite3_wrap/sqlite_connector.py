@@ -1,5 +1,5 @@
 
-from python_general_lib.database.sqlite3.sqlite_structure import SQLDatabase, SQLTable, SQLField
+from python_general_lib.database.sqlite3_wrap.sqlite_structure import SQLDatabase, SQLTable, SQLField
 import sqlite3
 import os
 import copy
@@ -184,6 +184,8 @@ class SQLite3Connector:
     # Handle deprecated tables
     deprecated_tables = existing_tables - {table.name for table in self.structure.tables}
     for table_name in deprecated_tables:
+      if table_name == "sqlite_sequence":
+        continue  # default for AUTOINCREMENT
       self.logger.warning(f"Deprecated table detected: {table_name}")
 
   def _ValidateTableStructure(self, table: SQLTable):
