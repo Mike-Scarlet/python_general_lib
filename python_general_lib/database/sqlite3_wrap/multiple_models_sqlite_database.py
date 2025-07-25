@@ -20,6 +20,7 @@ class MultipleModelsSQLiteDatabase:
         self.db_path = db_path
         self.model_classes = model_classes
         self.class_to_table_name_dict = class_to_table_name_dict or {}
+        self._primary_key_cache = {}
         
         # 设置默认表名（如果未提供）
         for model_class in self.model_classes:
@@ -84,8 +85,14 @@ class MultipleModelsSQLiteDatabase:
                 field_def = getattr(cls, pk_field, None)
                 
                 # 检查是否是自增字段
-                if isinstance(field_def, Field) and field_def.auto_increment:
-                    setattr(item, pk_field, row_id)
+                if isinstance(field_def, Field) and field_def.primary_key:
+                    # 获取字段类型
+                    annotations = cls.__annotations__
+                    field_type = annotations.get(pk_field, None)
+                    
+                    # 只更新整数类型的主键
+                    if field_type in (int, 'INTEGER', 'INT'):
+                        setattr(item, pk_field, row_id)
         
         return row_id
     
@@ -323,15 +330,27 @@ class MultipleModelsSQLiteDatabase:
     
     def _get_primary_keys(self, model_class: typing.Type[PySQLModel]) -> typing.List[str]:
         """获取模型类的主键字段"""
+        if model_class in self._primary_key_cache:
+            return self._primary_key_cache[model_class]
+        
         meta = model_class._sql_meta
         primary_key = meta.get('primary_key')
         
         if primary_key:
             if isinstance(primary_key, str):
-                return [primary_key]
-            return primary_key
+                result = [primary_key]
+            else:
+                result = primary_key
+        else:
+            # 检查字段级主键定义
+            result = []
+            for field_name, field_def in model_class.__dict__.items():
+                if isinstance(field_def, Field) and field_def.primary_key:
+                    result.append(field_name)
         
-        return []
+        # 将结果存入缓存
+        self._primary_key_cache[model_class] = result
+        return result
     
     def _record_to_model(self, model_class: typing.Type[PySQLModel], record: dict) -> PySQLModel:
         """将数据库记录转换为模型对象"""
@@ -344,13 +363,13 @@ if __name__ == "__main__":
     # 测试示例
     @PySQLModel(initialize_fields=True)
     class TestClassA:
-        id: int = Field(primary_key=True, auto_increment=True)
+        id: int = Field(primary_key=True)
         name: str = Field(not_null=True)
         value: float = Field(default=0.0)
     
     @PySQLModel
     class TestClassB:
-        id: int = Field(primary_key=True, auto_increment=True)
+        id: int = Field(primary_key=True)
         description: str = Field(not_null=True)
         timestamp: datetime.datetime = Field(default="CURRENT_TIMESTAMP")
     
