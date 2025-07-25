@@ -25,25 +25,21 @@ class Field:
                unique: bool = False, 
                not_null: bool = False, 
                default: Any = None, 
-               check: str = None,
-               foreign_key: Type = None):
+               check: str = None):
     """
     Initialize SQL field definition
     
     :param primary_key: Whether this is a primary key (field-level primary key definition)
-    :param auto_increment: Whether to auto-increment
     :param unique: Whether unique (field-level unique constraint)
     :param not_null: Whether NOT NULL
     :param default: Default value
     :param check: Check constraint expression
-    :param foreign_key: Referenced model class
     """
     self.primary_key = primary_key
     self.unique = unique
     self.not_null = not_null
     self.default = default
     self.check = check
-    self.foreign_key = foreign_key
   
   def ToSQLField(self, name: str, field_type: Type) -> SQLField:
     """Convert Python field to SQLField object"""
@@ -198,7 +194,16 @@ def GenerateSQLDatabase(*models: Type) -> SQLDatabase:
   # Add all tables to database
   for table in tables.values():
     db.AddTable(table)
-  
+
+  for table in db.tables:
+    for fk in table.foreign_keys:
+      if fk.ref_table not in db.table_name_dict:
+        raise ValueError(f"Foreign key references missing table: {fk.ref_table}")
+      
+  # Check for circular dependencies
+  if db.CheckForeignKeyCycles():
+    raise RuntimeError("Foreign key cycle detected")
+    
   return db
 
 
@@ -239,19 +244,10 @@ def _CreateTableFromModel(model_class: Type) -> SQLTable:
   # Set primary key (table-level primary key has priority)
   if meta['primary_key']:
     table.SetPrimaryKey(meta['primary_key'])
-  else:
-    # Find field-level primary keys
-    primary_keys = []
-    for field_name, field_def in model_class.__dict__.items():
-      if isinstance(field_def, Field) and field_def.primary_key:
-        primary_keys.append(field_name)
-    
-    if primary_keys:
-      table.SetPrimaryKey(primary_keys)
   
   # Add unique constraints
   for unique_fields in meta['unique_constraints']:
-    table.AddUniqueConstraint(unique_fields)
+    table.AddUniqueConstraint(unique_fields["columns"])
   
   # Add foreign key constraints (table-level)
   for fk_def in meta['foreign_keys']:
@@ -281,59 +277,94 @@ def _CreateTableFromModel(model_class: Type) -> SQLTable:
   return table
 
 if __name__ == "__main__":
+  # 测试用例1: 基本用户模型
   @PySQLModel
   class User:
-    """User table model"""
-    # Field definitions
-    id: int = Field(primary_key=True, auto_increment=True)
-    username: str = Field(unique=True, not_null=True)
-    email: str = Field(not_null=True)
-    created_at: datetime.datetime = Field(default="CURRENT_TIMESTAMP")
-    is_active: bool = Field(default=True)
+    id: int
+    username: str
+    email: str
+    created_at: datetime.datetime
     
-    # Table-level definitions
     class SQLMeta:
-      table_name = "app_users"  # Custom table name
+      primary_key = "id"
       indexes = [
-        {"columns": ["email"], "unique": True, "name": "idx_user_email"},
-        {"columns": ["username"], "name": "idx_user_username"}
-      ]
-      check_constraints = [
-        {"expression": "LENGTH(username) >= 3", "name": "chk_username_length"}
+        {"columns": ["email"], "unique": True},
+        {"columns": ["username"], "name": "idx_user_name"}
       ]
 
+  # 测试用例2: 带外键和检查约束的文章模型
   @PySQLModel
   class Post:
-    """Post table model"""
-    # Field definitions
-    id: int = Field(primary_key=True, auto_increment=True)
+    id: int = Field(primary_key=True)
     title: str = Field(not_null=True)
     content: str
+    user_id: int
+    published: bool = Field(default=False)
     created_at: datetime.datetime = Field(default="CURRENT_TIMESTAMP")
-    author_id: int = Field(foreign_key=User)  # Field-level foreign key
     
-    # Table-level definitions
     class SQLMeta:
-      primary_key = ["id"]  # Explicit table-level primary key
-      unique_constraints = [["title", "author_id"]]  # Composite unique constraint
-      indexes = [
-        {"columns": ["created_at"], "name": "idx_post_created"},
-        {"columns": ["title", "created_at"], "name": "idx_post_title_created"}
-      ]
-      foreign_keys = [  # Table-level foreign keys (supports multi-field)
+      foreign_keys = [
         {
-          "columns": ["author_id"],
-          "ref_table": "app_users",
+          "columns": "user_id",
+          "ref_table": "User",
           "ref_columns": "id",
           "on_delete": "CASCADE"
         }
       ]
       check_constraints = [
-        {"expression": "LENGTH(title) > 0", "name": "chk_title_length"}
+        {"expression": "LENGTH(title) > 5", "name": "chk_title_length"}
       ]
 
-  db = GenerateSQLDatabase(User, Post)
+  # 测试用例3: 多列主键和唯一约束的订单模型
+  @PySQLModel
+  class Order:
+    customer_id: int
+    product_id: int
+    quantity: int = Field(default=1)
+    order_date: datetime.date = Field(default="CURRENT_DATE")
+    
+    class SQLMeta:
+      primary_key = ["customer_id", "product_id"]
+      unique_constraints = [
+        {"columns": ["customer_id", "product_id", "order_date"]}
+      ]
+      table_name = "orders"  # 自定义表名
 
-  # Generate SQL script
+  # 测试用例4: 带初始化字段的模型
+  @PySQLModel(initialize_fields=True)
+  class Config:
+    name: str = Field(not_null=True, unique=True)
+    value: str
+    description: str = Field(default="No description provided")
+    active: bool = Field(default=True)
+
+  # 创建数据库结构并生成SQL脚本
+  db = GenerateSQLDatabase(User, Post, Order, Config)
   sql_script = db.GenerateSQLScript()
+  
+  print("=================== GENERATED SQL SCRIPT ===================")
   print(sql_script)
+  
+  print("\n=================== DATABASE STRUCTURE VALIDATION ===================")
+  try:
+    db.ValidateStructure()
+    print("Database structure is valid")
+    
+    # 检查外键依赖
+    print("\nForeign key relationships:")
+    for table in db.tables:
+      print(f"Table '{table.name}':")
+      if table.foreign_keys:
+        for fk in table.foreign_keys:
+          print(f"  -> References: {fk.ref_table} ({', '.join(fk.ref_columns)})")
+      else:
+        print("  No foreign keys")
+    
+    # 检查外键循环
+    if db.CheckForeignKeyCycles():
+      print("\nWARNING: Foreign key cycle detected!")
+    else:
+      print("\nNo foreign key cycles detected")
+      
+  except ValueError as e:
+    print(f"Validation error: {str(e)}")
