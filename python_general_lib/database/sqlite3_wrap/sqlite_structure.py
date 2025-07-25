@@ -61,7 +61,7 @@ class SQLField:
   def __repr__(self) -> str:
     return "<SQLField: '{}' at {:016X}>".format(self.name, id(self))
   
-  def GetCreateStr(self):    
+  def GetCreateStr(self):
     s = self.data_type_str
     subs = []
     if self.is_primary:
@@ -88,10 +88,17 @@ class SQLField:
         default_val = str(self.default)
       # Handle string values
       elif isinstance(self.default, str):
-        # Check if it's a function call or expression
-        if self.default.startswith("(") and self.default.endswith(")"):
-          default_val = self.default  # Function call, no quotes needed
+        # 检查是否是SQL函数或表达式
+        if self.default in ["CURRENT_TIMESTAMP", "CURRENT_DATE", "CURRENT_TIME"]:
+          default_val = self.default
+        # 检查是否是数字字符串
+        elif self.default.replace('.', '', 1).isdigit() and self.default.count('.') <= 1:
+          default_val = self.default
+        # 检查是否是函数表达式
+        elif self.default.startswith("(") and self.default.endswith(")"):
+          default_val = self.default
         else:
+          # 普通字符串需要转义和引号
           escaped = self.default.replace("'", "''")
           default_val = f"'{escaped}'"
       # Handle other types
@@ -613,7 +620,13 @@ class SQLTable:
     # Parse DEFAULT clause
     default_match = re.search(r"DEFAULT\s+([^,\)]+)", normalized, re.IGNORECASE)
     if default_match:
-      params["default"] = default_match.group(1).strip()
+      default_val = default_match.group(1).strip()
+      # process string with quote
+      if default_val.startswith("'") and default_val.endswith("'"):
+        # store origin string
+        params["default"] = default_val[1:-1]
+      else:
+        params["default"] = default_val
       # Remove from normalized string
       normalized = normalized.replace(default_match.group(0), "")
     
@@ -668,24 +681,33 @@ class SQLDatabase:
     return self.table_name_dict.get(name)
   
   def CheckForeignKeyCycles(self) -> bool:
-    """Check for circular foreign key dependencies (structural check only)"""
     visited = set()
     rec_stack = set()
+    
+    # 构建引用图：key是表名，value是该表引用的表名列表
+    reference_graph = {}
+    for table in self.tables:
+      references = []
+      for fk in table.foreign_keys:
+        references.append(fk.ref_table)
+      reference_graph[table.name] = references
     
     def dfs(table_name):
       visited.add(table_name)
       rec_stack.add(table_name)
       
-      for neighbor in self.foreign_key_graph.get(table_name, []):
-        if neighbor not in visited:
-          if dfs(neighbor):
+      # 遍历当前表引用的所有表
+      for ref_table in reference_graph.get(table_name, []):
+        if ref_table not in visited:
+          if dfs(ref_table):
             return True
-        elif neighbor in rec_stack:
+        elif ref_table in rec_stack:
           return True
       
       rec_stack.remove(table_name)
       return False
     
+    # 遍历所有表进行DFS
     for table in self.tables:
       if table.name not in visited:
         if dfs(table.name):
@@ -830,7 +852,11 @@ class SQLDatabase:
       # Convert constraints
       constraints = {}
       if "primary_keys" in table_def:
-        constraints["primary_key"] = table_def["primary_keys"]
+        # Ensure primary key is always a list
+        pk_columns = table_def["primary_keys"]
+        if isinstance(pk_columns, str):
+          pk_columns = [pk_columns]
+        constraints["primary_key"] = pk_columns
       
       # Build new format table definition
       new_table_def = {
@@ -1030,6 +1056,7 @@ if __name__ == "__main__":
   
   try:
     cyclic_db = SQLDatabase.CreateFromDictV2(cyclic_db_def)
+    cyclic_db.GenerateSQLScript()
     print("意外成功: 外键循环未被检测到")
   except RuntimeError as e:
     print(f"成功捕获外键循环错误: {str(e)}")
