@@ -331,12 +331,7 @@ class MultipleModelsSQLiteDatabase:
                 return [primary_key]
             return primary_key
         
-        # 检查字段定义
-        pks = []
-        for field_name, field_def in model_class.__dict__.items():
-            if isinstance(field_def, Field) and field_def.primary_key:
-                pks.append(field_name)
-        return pks
+        return []
     
     def _record_to_model(self, model_class: typing.Type[PySQLModel], record: dict) -> PySQLModel:
         """将数据库记录转换为模型对象"""

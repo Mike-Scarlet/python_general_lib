@@ -22,7 +22,6 @@ class Field:
   """
   def __init__(self, 
                primary_key: bool = False, 
-               auto_increment: bool = False,
                unique: bool = False, 
                not_null: bool = False, 
                default: Any = None, 
@@ -40,7 +39,6 @@ class Field:
     :param foreign_key: Referenced model class
     """
     self.primary_key = primary_key
-    self.auto_increment = auto_increment
     self.unique = unique
     self.not_null = not_null
     self.default = default
@@ -74,9 +72,9 @@ class Field:
     return SQLField(
       name=name,
       data_type_str=sql_type,
+      is_primary=self.primary_key,
       unique=self.unique,
-      not_null=self.not_null or self.primary_key,  # Primary keys are automatically NOT NULL
-      auto_increment=self.auto_increment,
+      not_null=self.not_null,
       default=processed_default,
       check=self.check
     )

@@ -31,13 +31,12 @@ class SQLField:
   data_type_str: str
   unique: bool
   not_null: bool
-  auto_increment: bool
   default: typing.Any
   check: str
 
+  PRIMARY_TOKEN = "PRIMARY KEY"
   UNIQUE_TOKEN = "UNIQUE"
   NOT_NULL_TOKEN = "NOT NULL"
-  AUTO_INCREMENT_TOKEN = "AUTOINCREMENT"
   DEFAULT_TOKEN = "DEFAULT"
   CHECK_TOKEN = "CHECK"
 
@@ -45,36 +44,28 @@ class SQLField:
   def __init__(self,
                name: str,
                data_type_str: str,
+               is_primary: bool = False,
                unique: bool = False,
                not_null: bool = False,
-               auto_increment: bool = False,
                default: typing.Any=None,
                check: str = None) -> None:
     self.name = name
     self.data_type_str = data_type_str
     self.data_class = SQLField.GetClass(self.data_type_str)
+    self.is_primary = is_primary
     self.unique = unique
     self.not_null = not_null
-    self.auto_increment = auto_increment
     self.default = default
     self.check = check  # Field check constraint
 
   def __repr__(self) -> str:
     return "<SQLField: '{}' at {:016X}>".format(self.name, id(self))
   
-  def GetCreateStr(self):
-    if self.auto_increment:
-      # Validate type for auto-increment
-      normalized_type = self.data_type_str.upper()
-      if normalized_type not in ("INT", "INTEGER"):
-        raise ValueError(
-          f"auto_increment can only be used with INTEGER types, "
-          f"got {self.data_type_str} for field {self.name}"
-        )
-      return f"INTEGER PRIMARY KEY AUTOINCREMENT"
-    
+  def GetCreateStr(self):    
     s = self.data_type_str
     subs = []
+    if self.is_primary:
+      subs.append(SQLField.PRIMARY_TOKEN)
     if self.unique:
       subs.append(SQLField.UNIQUE_TOKEN)
     if self.not_null:
@@ -252,12 +243,28 @@ class UniqueConstraint:
 
 class PrimaryKeyConstraint:
   """Represents table-level primary key constraint"""
-  def __init__(self, columns: typing.List[str]):
+  def __init__(self, 
+               columns: typing.Union[str, typing.List[str]], 
+               constraint_type: str = "table"):
+    """
+    :param columns: Column name(s) included in the primary key
+    :param constraint_type: "table" or "column" (indicating origin of the constraint)
+    """
+    if isinstance(columns, str):
+      columns = [columns]
     self.columns = columns
+    self.constraint_type = constraint_type
     
   def GetConstraintStr(self) -> str:
     """Generate SQL fragment for primary key constraint"""
-    return f"PRIMARY KEY ({', '.join(self.columns)})"
+    if self.constraint_type == "column":
+      # For single-column column-level constraint, just "PRIMARY KEY"
+      return ""
+    elif self.constraint_type == "table":
+      # For table-level constraint or composite keys
+      return f"PRIMARY KEY ({', '.join(self.columns)})"
+    else:
+      raise ValueError(f"Unknown constraint type: {self.constraint_type}")
 
 class CheckConstraint:
   """Represents table-level check constraint"""
@@ -334,11 +341,24 @@ class SQLTable:
     if field.name in self.field_name_dict:
       raise ValueError(f"Field '{field.name}' already exists in table '{self.name}'")
     
+    # check column primary key conflict
+    if field.is_primary:
+      if self.primary_key:
+        raise ValueError(f"Cannot add column-level primary key on field '{field.name}' in table '{self.name}': "
+                          f"Primary key already exists (type: {self.primary_key.constraint_type})")
+      
+      # create column primary key
+      self.primary_key = PrimaryKeyConstraint(field.name, "column")
+    
     self.fields.append(field)
     self.field_name_dict[field.name] = field
   
   def SetPrimaryKey(self, columns: typing.Union[str, typing.List[str]]):
     """Set table-level primary key constraint"""
+    if self.primary_key:
+      raise ValueError(f"Cannot set table-level primary key in table '{self.name}': "
+              f"Primary key already exists (type: {self.primary_key.constraint_type})")
+    
     if isinstance(columns, str):
       columns = [columns]
     
@@ -347,7 +367,7 @@ class SQLTable:
       if column not in self.field_name_dict:
         raise ValueError(f"Column '{column}' doesn't exist in table")
     
-    self.primary_key = PrimaryKeyConstraint(columns)
+    self.primary_key = PrimaryKeyConstraint(columns, "table")
   
   def AddForeignKey(self, 
                       local_columns: typing.Union[str, typing.List[str]], 
@@ -444,11 +464,8 @@ class SQLTable:
     # Table-level constraints section
     constraints = []
 
-    # Check for auto-increment fields (which already include primary key)
-    auto_inc_fields = [f for f in self.fields if f.auto_increment]
-    
     # Primary key constraint (if no auto-increment fields present)
-    if self.primary_key and not auto_inc_fields:
+    if self.primary_key and self.primary_key.constraint_type == "table":
       constraints.append(self.primary_key.GetConstraintStr())
     
     # Unique constraints
@@ -519,9 +536,9 @@ class SQLTable:
       field = SQLField(
         name=field_name,
         data_type_str=params["data_type"],
+        is_primary=params.get("is_primary", False),
         unique=params.get("unique", False),
         not_null=params.get("not_null", False),
-        auto_increment=params.get("auto_increment", False),
         default=params.get("default", None),
         check=params.get("check", None)
       )
@@ -568,36 +585,12 @@ class SQLTable:
       name = idx_def.get("name")
       table.AddIndex(columns, unique, name)
     
-    # Step 3: Validate integrity
-    # Check auto-increment fields have proper primary key setup
-    auto_inc_fields = [f for f in table.fields if f.auto_increment]
-    if auto_inc_fields:
-      if len(auto_inc_fields) > 1:
-        raise ValueError("Only one auto-increment field is allowed per table")
-      
-      auto_field = auto_inc_fields[0]
-      # Verify table-level primary key includes only this field
-      if not table.primary_key:
-        table.primary_key = PrimaryKeyConstraint([auto_field.name])
-      if table.primary_key.columns != [auto_field.name]:
-        raise ValueError(f"Auto-increment field '{auto_field.name}' must be the only primary key")
-    
     return table
   
   @staticmethod
   def _ParseFieldString(type_str: str) -> dict:
     """
     Parse field definition string to extract parameters
-    Example: "INTEGER PRIMARY KEY AUTOINCREMENT" or 
-         "TEXT NOT NULL DEFAULT 'abc' CHECK(LENGTH(name) > 5)"
-    Returns: {
-      "data_type": "TEXT",
-      "unique": True,
-      "not_null": True,
-      "auto_increment": False,
-      "default": "'abc'",
-      "check": "LENGTH(name) > 5"
-    }
     """
     # Preprocess: uppercase for matching but keep original values
     normalized = type_str.upper()
@@ -608,10 +601,13 @@ class SQLTable:
       "auto_increment": "AUTOINCREMENT" in normalized,
       "is_primary": "PRIMARY KEY" in normalized
     }
+
+    if params["auto_increment"]:
+      raise ValueError("AUTOINCREMENT is not allowed in this framework")
     
     # Remove processed constraint tokens
     for token in [SQLField.UNIQUE_TOKEN, SQLField.NOT_NULL_TOKEN, 
-                  SQLField.AUTO_INCREMENT_TOKEN, "PRIMARY KEY"]:
+                  "AUTOINCREMENT", "PRIMARY KEY"]:
       normalized = normalized.replace(token, "")
     
     # Parse DEFAULT clause
@@ -875,87 +871,166 @@ class SQLDatabase:
             f"Foreign key in table '{table.name}' references "
             f"non-existent table '{fk.ref_table}'"
           )
-    
-    # Verify auto-increment fields have proper primary key setup
-    for table in self.tables:
-      auto_inc_fields = [f for f in table.fields if f.auto_increment]
-      if auto_inc_fields:
-        if len(auto_inc_fields) > 1:
-          raise ValueError(
-            f"Table '{table.name}' has multiple auto-increment fields"
-          )
-        
-        auto_field = auto_inc_fields[0]
-        if not table.primary_key:
-          raise ValueError(
-            f"Auto-increment field '{auto_field.name}' in table '{table.name}' "
-            "must be set as primary key"
-          )
-        if table.primary_key.columns != [auto_field.name]:
-          raise ValueError(
-            f"Auto-increment field '{auto_field.name}' in table '{table.name}' "
-            "must be the only primary key"
-          )
 
 if __name__ == "__main__":
-  table_name_initiate_dict = {
-    "BasicTable": {
+  # 测试用例1: 基本表结构 (旧格式)
+  test_case1 = {
+    "users": {
       "field_definition": {
-        "id": "INTEGER NOT NULL AUTOINCREMENT",
-        "name": "TEXT",
-        "time": "REAL"
+        "id": "INTEGER NOT NULL",
+        "username": "TEXT NOT NULL",
+        "created_at": "DATETIME DEFAULT CURRENT_TIMESTAMP",
       },
       "primary_keys": "id"
     },
-    "test_table": {
+    "posts": {
       "field_definition": {
-        "id": "INT NOT NULL",
-        "hell": "BLOB"
+        "id": "INTEGER NOT NULL",
+        "title": "TEXT NOT NULL",
+        "content": "TEXT",
+        "user_id": "INTEGER",
       }
     }
   }
-  test_default_dict = {
-    "BasicTable": {
-      "field_definition": {
-        "id": "INT DEFAULT 2",
-        "name": "TEXT"
-      }
-    }
-  }
-  test_v2_dict = {
+  
+  # 测试用例2: 新格式带表级约束
+  test_case2 = {
     "users": {
       "fields": {
-        "id": "INTEGER PRIMARY KEY AUTOINCREMENT",
+        "id": "INTEGER",
         "username": "TEXT NOT NULL UNIQUE",
         "email": "TEXT",
-        "group_id": "INTEGER",
         "created_at": "DATETIME DEFAULT CURRENT_TIMESTAMP",
       },
       "constraints": {
         "primary_key": "id",
-        "foreign_keys": [
-          {
-            "columns": "group_id",
-            "ref_table": "user_groups",
-            "ref_columns": "id",
-            "on_delete": "SET NULL"
-          }
+        "check_constraints": [
+          {"expression": "LENGTH(username) > 3", "name": "chk_username_length"}
         ]
       },
       "indexes": [
         {"columns": ["email"], "unique": True}
       ]
     },
-    "user_groups": {
+    "posts": {
       "fields": {
-        "id": "INTEGER PRIMARY KEY AUTOINCREMENT",
-        "name": "TEXT NOT NULL"
+        "id": "INTEGER PRIMARY KEY",
+        "title": "TEXT NOT NULL",
+        "content": "TEXT",
+        "user_id": "INTEGER",
+      },
+      "constraints": {
+        "foreign_keys": [
+          {
+            "columns": "user_id",
+            "ref_table": "users",
+            "ref_columns": "id",
+            "on_delete": "CASCADE"
+          }
+        ]
+      }
+    }
+  }
+  
+  # 测试用例3: 高级场景带多列约束
+  test_case3 = {
+    "departments": {
+      "fields": {
+        "dept_id": "INTEGER PRIMARY KEY",
+        "dept_name": "TEXT NOT NULL",
+      }
+    },
+    "employees": {
+      "fields": {
+        "emp_id": "INTEGER PRIMARY KEY",
+        "first_name": "TEXT NOT NULL",
+        "last_name": "TEXT NOT NULL",
+        "salary": "REAL",
+        "dept_id": "INTEGER",
+        "start_date": "DATE DEFAULT CURRENT_DATE",
+      },
+      "constraints": {
+        "unique_constraints": [
+          {"columns": ["first_name", "last_name"], "name": "uq_full_name"}
+        ],
+        "foreign_keys": [
+          {
+            "columns": "dept_id",
+            "ref_table": "departments",
+            "ref_columns": "dept_id",
+            "on_update": "CASCADE"
+          }
+        ],
+        "check_constraints": [
+          {"expression": "salary > 0", "name": "chk_salary_positive"}
+        ]
+      },
+      "indexes": [
+        {"columns": ["last_name"], "name": "idx_employees_lastname"},
+        {"columns": ["dept_id", "salary"], "name": "idx_dept_salary"}
+      ]
+    }
+  }
+  
+  # 测试用例4: 默认值特殊处理
+  test_case4 = {
+    "settings": {
+      "fields": {
+        "id": "INTEGER PRIMARY KEY",
+        "is_active": "BOOLEAN DEFAULT 1",
+        "config": "TEXT DEFAULT '{}'",
+        "created": "DATETIME DEFAULT CURRENT_TIMESTAMP",
+        "modified": "DATETIME"
       }
     }
   }
 
-  # db = SQLDatabase.CreateFromDict(table_name_initiate_dict)
-  # db = SQLDatabase.CreateFromDict(test_default_dict)
-  db = SQLDatabase.CreateFromDictV2(test_v2_dict)
-  print(db.GenerateSQLScript())
+  print("==================== 测试用例1: 旧格式基本表 ====================")
+  db1 = SQLDatabase.CreateFromDict(test_case1)
+  print(db1.GenerateSQLScript())
+  
+  print("\n==================== 测试用例2: 新格式带外键约束 ====================")
+  db2 = SQLDatabase.CreateFromDictV2(test_case2)
+  print(db2.GenerateSQLScript())
+  
+  print("\n==================== 测试用例3: 复杂表级约束 ====================")
+  db3 = SQLDatabase.CreateFromDictV2(test_case3)
+  print(db3.GenerateSQLScript())
+  
+  print("\n==================== 测试用例4: 特殊默认值处理 ====================")
+  db4 = SQLDatabase.CreateFromDictV2(test_case4)
+  print(db4.GenerateSQLScript())
+  
+  # 验证外键循环检测
+  print("\n==================== 测试外键循环检测 ====================")
+  cyclic_db_def = {
+    "tableA": {
+      "fields": {
+        "id": "INTEGER PRIMARY KEY",
+        "b_id": "INTEGER",
+      },
+      "constraints": {
+        "foreign_keys": [
+          {"columns": "b_id", "ref_table": "tableB", "ref_columns": "id"}
+        ]
+      }
+    },
+    "tableB": {
+      "fields": {
+        "id": "INTEGER PRIMARY KEY",
+        "a_id": "INTEGER",
+      },
+      "constraints": {
+        "foreign_keys": [
+          {"columns": "a_id", "ref_table": "tableA", "ref_columns": "id"}
+        ]
+      }
+    }
+  }
+  
+  try:
+    cyclic_db = SQLDatabase.CreateFromDictV2(cyclic_db_def)
+    print("意外成功: 外键循环未被检测到")
+  except RuntimeError as e:
+    print(f"成功捕获外键循环错误: {str(e)}")
   pass
