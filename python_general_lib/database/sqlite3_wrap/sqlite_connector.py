@@ -1,7 +1,7 @@
 
 from python_general_lib.database.sqlite3_wrap.sqlite_structure import SQLDatabase, SQLTable, SQLField
 import sqlite3
-import os
+import os, re
 import copy
 import logging
 
@@ -105,61 +105,99 @@ class SQLite3Connector:
     self.logger.info(f"Loaded {len(table_names)} table structures from database")
 
   def _RecreateTableStructure(self, table_name: str) -> SQLTable:
-    """Rebuild structure of a single table"""
     table = SQLTable(table_name)
     cursor = self.conn.cursor()
     
-    # Get field definitions
+    # 获取字段定义
     cursor.execute(f"PRAGMA table_info({table_name})")
     for row in cursor.fetchall():
       _, name, data_type, not_null, default_value, pk = row
-      
-      # Analyze field constraints
-      constraints = {
-        "unique": False,
-        "auto_increment": False,
-        "primary_key": False,
-        "default": default_value
-      }
-      
-      # Get full creation statement
-      cursor.execute(f"SELECT sql FROM sqlite_master WHERE tbl_name = ? AND type = 'table'", (table_name,))
-      create_sql = cursor.fetchone()[0].upper()
-      
-      # Check constraints
-      if f"UNIQUE({name})" in create_sql or f"UNIQUE ({name})" in create_sql:
-        constraints["unique"] = True
-      if "AUTOINCREMENT" in create_sql:
-        constraints["auto_increment"] = True
-      if pk:
-        constraints["primary_key"] = True
-      
-      # Create field object
       field = SQLField(
         name=name,
         data_type_str=data_type,
-        unique=constraints["unique"],
         not_null=bool(not_null),
-        auto_increment=constraints["auto_increment"],
-        default=default_value
+        default=default_value,
+        is_primary=False  # 稍后统一处理主键
       )
       table.AddField(field)
-      
-      # Set primary key
-      if constraints["primary_key"]:
-        table.SetPrimaryKey([name])
     
-    # Get foreign key constraints
+    # 获取主键约束 - 使用大小写不敏感匹配
+    cursor.execute(f"SELECT sql FROM sqlite_master WHERE tbl_name=? AND type='table'", (table_name,))
+    row = cursor.fetchone()
+    if row is None:
+      create_sql = ""
+    else:
+      create_sql = row[0]
+    
+    # 使用大小写不敏感的正则表达式
+    pk_match = re.search(r"PRIMARY KEY\s*\(([^)]+)\)", create_sql, re.IGNORECASE)
+    if pk_match:
+      # 保留原始大小写
+      pk_columns = [col.strip().replace('"', '') for col in pk_match.group(1).split(",")]
+      table.SetPrimaryKey(pk_columns)
+    
+    # 获取外键约束
     cursor.execute(f"PRAGMA foreign_key_list({table_name})")
+    fk_groups = {}
     for row in cursor.fetchall():
-      _, _, ref_table, from_col, to_col, on_delete, on_update = row
+      group_id, _, ref_table, from_col, to_col, on_update, on_delete = row[:7]
+      if group_id not in fk_groups:
+        fk_groups[group_id] = {'local': [], 'ref': [], 'ref_table': ref_table}
+      fk_groups[group_id]['local'].append(from_col)
+      fk_groups[group_id]['ref'].append(to_col)
+      fk_groups[group_id]['on_update'] = on_update
+      fk_groups[group_id]['on_delete'] = on_delete
+    
+    for fk in fk_groups.values():
       table.AddForeignKey(
-        local_columns=[from_col],
-        ref_table=ref_table,
-        ref_columns=[to_col],
-        on_delete=on_delete,
-        on_update=on_update
+        fk['local'],
+        fk['ref_table'],
+        fk['ref'],
+        fk.get('on_delete'),
+        fk.get('on_update')
       )
+    
+    # 获取唯一约束 - 使用大小写不敏感匹配
+    unique_matches = re.findall(r"CONSTRAINT\s+(\w+)\s+UNIQUE\s*\(([^)]+)\)", create_sql, re.IGNORECASE)
+    for name, cols in unique_matches:
+      # 保留原始大小写
+      table.AddUniqueConstraint([c.strip() for c in cols.split(",")], name)
+    
+    # 获取检查约束 - 使用大小写不敏感匹配
+    check_matches = re.findall(r"CONSTRAINT\s+(\w+)\s+CHECK\s*\(([^)]+)\)", create_sql, re.IGNORECASE)
+    for name, expr in check_matches:
+      # 保留原始大小写
+      table.AddCheckConstraint(expr, name)
+    
+    # 获取索引 - 修复后的实现
+    cursor.execute(f"PRAGMA index_list({table_name})")
+    index_list = cursor.fetchall()
+    
+    for index_row in index_list:
+      # index_row 结构: (seq, name, unique, origin, partial)
+      index_name = index_row[1]
+      unique = bool(index_row[2])
+      origin = index_row[3]
+      
+      # 跳过主键索引（因为主键约束已经处理过）
+      if origin == 'pk':
+        continue
+      
+      # 获取索引包含的列
+      cursor.execute(f"PRAGMA index_info({index_name})")
+      index_cols = []
+      for col_row in cursor.fetchall():
+        # col_row 结构: (seqno, cid, name)
+        seqno = col_row[0]
+        col_name = col_row[2]
+        index_cols.append((seqno, col_name))
+      
+      # 按seqno排序并提取列名
+      index_cols.sort(key=lambda x: x[0])
+      columns = [col[1] for col in index_cols]
+      
+      # 添加索引到表结构
+      table.AddIndex(columns, unique=unique, name=index_name)
     
     return table
 
@@ -178,6 +216,8 @@ class SQLite3Connector:
     for table in self.structure.tables:
       if table.name in existing_tables:
         self._ValidateTableStructure(table)
+        # 添加索引验证
+        self._ValidateTableIndexes(table)
       else:
         self._CreateTable(table)
     
@@ -203,10 +243,10 @@ class SQLite3Connector:
     for field in table.fields:
       if field.name in existing_field_names:
         existing_type = existing_fields[field.name]["type"]
-        required_type = field.data_type_str.upper()
+        required_type = field.data_type_str
         
         # Basic type validation
-        if existing_type != required_type:
+        if existing_type.upper() != required_type.upper():
           self.logger.warning(
             f"Field type mismatch: {table.name}.{field.name} "
             f"(Actual: {existing_type}, Required: {required_type}) "
@@ -214,6 +254,35 @@ class SQLite3Connector:
           )
     
     # TODO: Handle field deletion and constraint changes (requires complex migration)
+    
+  def _ValidateTableIndexes(self, table: SQLTable):
+    """Validate table indexes and create missing ones"""
+    # 获取数据库中该表的所有索引
+    cursor = self.conn.cursor()
+    cursor.execute("""
+      SELECT name FROM sqlite_master 
+      WHERE type='index' 
+      AND tbl_name = ?
+      AND name NOT LIKE 'sqlite_autoindex_%'  -- 排除自动创建的主键/唯一约束索引
+    """, (table.name,))
+    existing_indexes = {row[0] for row in cursor.fetchall()}
+    
+    # 获取表定义中索引的名称
+    defined_index_names = {index.name for index in table.indexes}
+    
+    # 找出缺失的索引
+    missing_indexes = defined_index_names - existing_indexes
+    
+    # 创建缺失的索引
+    for index in table.indexes:
+      if index.name in missing_indexes:
+        self.logger.info(f"Adding index {index.name} on table {table.name}")
+        try:
+          self.conn.execute(index.GetCreateSQL(table.name))
+          self.logger.debug(f"Executed: {index.GetCreateSQL(table.name)}")
+        except sqlite3.Error as e:
+          self.logger.error(f"Failed to create index {index.name}: {str(e)}")
+          # 继续处理其他索引
 
   def _GetExistingFields(self, table_name: str) -> dict:
     """Get existing table field information"""
@@ -225,10 +294,32 @@ class SQLite3Connector:
     }
 
   def _AddFieldToTable(self, table_name: str, field: SQLField):
-    """Add new field to table"""
+    """Add new field to existing table"""
+    # 检查SQLite对ALTER TABLE ADD COLUMN的限制
+    unsupported_constraints = []
+    if field.is_primary:
+      unsupported_constraints.append("PRIMARY KEY")
+    if field.unique:
+      unsupported_constraints.append("UNIQUE")
+    if field.check:
+      unsupported_constraints.append("CHECK")
+    
+    if unsupported_constraints:
+      raise ValueError(
+        f"Cannot add field '{field.name}' with unsupported constraints: "
+        f"{', '.join(unsupported_constraints)}. SQLite's ALTER TABLE ADD COLUMN "
+        f"only supports NOT NULL and DEFAULT constraints."
+      )
+    
+    # 构建并执行ALTER TABLE语句
     query = f"ALTER TABLE {table_name} ADD COLUMN {field.name} {field.GetCreateStr()}"
-    self.conn.execute(query)
-    self.logger.debug(f"Executed: {query}")
+    try:
+      self.conn.execute(query)
+      self.logger.debug(f"Executed: {query}")
+    except sqlite3.Error as e:
+      self.logger.error(f"Failed to add field {table_name}.{field.name}: {str(e)}")
+      raise
+
 
   def AddTable(self, table: SQLTable) -> None:
     """Add table to database"""
@@ -288,7 +379,7 @@ class SQLite3Connector:
         cursor.execute(sql, params or ())
       return cursor
     except sqlite3.Error as e:
-      self.logger.error(f"SQL execution error: {str(e)}")
+      self.logger.error(f"SQL execution error: {str(e)}, sql: {sql}, params: {params}")
       raise
 
   def __del__(self):
@@ -298,7 +389,7 @@ if __name__ == "__main__":
   table_name_initiate_dict = {
     "BasicTable": {
       "field_definition": {
-        "id": "INTEGER AUTOINCREMENT",
+        "id": "INTEGER",
         "name": "TEXT NOT NULL",
         "time": "REAL"
       },

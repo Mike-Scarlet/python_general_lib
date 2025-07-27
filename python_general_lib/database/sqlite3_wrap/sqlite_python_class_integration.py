@@ -77,16 +77,91 @@ class Field:
 
 def PySQLModel(cls: Type = None, *, initialize_fields: bool = False) -> Type:
   """
-  Model decorator with field initialization option
+  Model decorator for creating SQL ORM classes with advanced configuration options.
   
-  Functions:
-  1. Marks a class as an SQL model
-  2. Initializes model metadata
-  3. Sets default table name
-  4. Optionally initializes fields on instantiation
+  Provides declarative SQL table mapping with support for constraints, indexes, 
+  and field initialization. Automatically adds JSON serialization methods if missing.
+  
+  Features:
+  1. Declarative table configuration via SQLMeta
+  2. Field initialization with default values
+  3. Automatic JSON serialization
+  4. Support for constraints (primary keys, foreign keys, checks)
+  5. Table and field-level configuration overrides
   
   Args:
-    initialize_fields: If True, initialize all fields with default values (or None) on instantiation
+    cls: Class to decorate (handled automatically)
+    initialize_fields: Initialize fields with default values on instantiation
+  
+  Returns:
+    Enhanced class with SQL modeling capabilities
+    
+  Comprehensive Example with actual Field parameters:
+    @PySQLModel(initialize_fields=True)
+    class Customer:
+      # Field definitions with supported parameters
+      id: int = Field(
+        primary_key=True,  # Field-level primary key
+        default=0,         # Default value
+        not_null=True      # NOT NULL constraint
+      )
+      
+      name: str = Field(
+        default="Unknown",   # Default value
+        not_null=True,     # NOT NULL constraint
+      )
+      
+      email: str = Field(
+        unique=True,     # Unique constraint
+        default=None,     # Default to None
+        not_null=False    # Allow NULL (default)
+      )
+      
+      age: int = Field(
+        check="age >= 18",   # Field-level check constraint
+        default=18       # Default value
+      )
+      
+      join_date: datetime.date = Field(
+        default="CURRENT_DATE"  # Special date default
+      )
+      
+      is_active: bool = Field(
+        default=False     # Booleans handled specially
+      )
+      
+      # SQLMeta configuration
+      class SQLMeta:
+        table_name = "customers"
+        primary_key = ["id"]  # Table-level primary key (overrides field-level)
+        
+        unique_constraints = [  # Composite unique constraint
+          {"columns": ["name", "email"]}
+        ]
+        
+        foreign_keys = [     # Table-level foreign keys
+          {
+            "columns": ["country_id"],
+            "ref_table": "countries",
+            "ref_columns": ["id"],
+            "on_delete": "CASCADE",
+            "on_update": "RESTRICT"
+          }
+        ]
+        
+        indexes = [      # Index definitions
+          {"columns": ["age"], "name": "idx_customer_age"},
+          {"columns": ["email"], "unique": True}
+        ]
+        
+        check_constraints = [   # Table-level checks
+          {"expression": "LENGTH(name) > 1", "name": "chk_name_length"}
+        ]
+  
+    # Field initialization behavior:
+    # - Fields initialize with defaults when object created
+    # - Booleans convert to 1/0
+    # - Special date/time defaults handled
   """
   def decorator(cls: Type) -> Type:
     # Initialize metadata

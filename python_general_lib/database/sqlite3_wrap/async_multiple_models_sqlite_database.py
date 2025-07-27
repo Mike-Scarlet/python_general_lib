@@ -30,7 +30,7 @@ class AsyncMultipleModelsSQLiteDatabase:
         self.logger = logging.getLogger("AsyncMultipleModelsSQLiteDatabase")
         self.logger.setLevel(logging.INFO)
     
-    async def Initiate(self, check_same_thread: bool = True, commit_when_leave: bool = False, 
+    async def Initiate(self, loop: asyncio.AbstractEventLoop, check_same_thread: bool = True, commit_when_leave: bool = False, 
                       verbose_level: int = logging.INFO, commit_interval: float = 20.0) -> None:
         """
         初始化数据库连接和结构
@@ -53,7 +53,7 @@ class AsyncMultipleModelsSQLiteDatabase:
         self._timed_trigger.SetCallbackAsyncFunction(self.CommitAsync)
         
         # 启动自动提交任务
-        await self._timed_trigger.StartTriggerHandlerTask(asyncio.get_running_loop())
+        await self._timed_trigger.StartTriggerHandlerTask(loop)
         
         self.logger.info(f"Database initialized at {self.sync_db.db_path}")
     
