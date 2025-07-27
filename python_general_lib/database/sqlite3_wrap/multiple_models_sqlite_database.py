@@ -156,6 +156,8 @@ class MultipleModelsSQLiteDatabase:
         params = []
         for pk in primary_keys:
             value = getattr(item, pk)
+            if isinstance(value, Field):
+                raise ValueError(f"primary key for table {table_name} item not set: {pk}")
             where_parts.append(f"{pk} = ?")
             params.append(value)
         
@@ -311,6 +313,8 @@ class MultipleModelsSQLiteDatabase:
         params = []
         for pk in primary_keys:
             value = getattr(item, pk)
+            if isinstance(value, Field):
+                raise ValueError(f"primary key for table {table_name} item not set: {pk}")
             where_parts.append(f"{pk} = ?")
             params.append(value)
         

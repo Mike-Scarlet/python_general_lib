@@ -2,13 +2,12 @@ import asyncio
 import typing
 import logging
 from python_general_lib.database.sqlite3_wrap.sqlite_python_class_integration import PySQLModel, Field
-from python_general_lib.database.multiple_models_sqlite_database import MultipleModelsSQLiteDatabase
+from python_general_lib.database.sqlite3_wrap.multiple_models_sqlite_database import MultipleModelsSQLiteDatabase
 from python_general_lib.async_component.async_timed_trigger import AsyncTimedTrigger
 from python_general_lib.interface.json_serializable import IJsonSerializable
 
 class AsyncMultipleModelsSQLiteDatabase:
     def __init__(self, db_path: str, model_classes: typing.List[typing.Type[PySQLModel]], 
-                 model_primary_keys_dict: typing.Optional[typing.Dict[typing.Type, typing.Union[str, typing.List[str]]]] = None,
                  class_to_table_name_dict: typing.Optional[typing.Dict[typing.Type, str]] = None) -> None:
         """
         异步SQLite数据库管理器，基于同步版本封装
@@ -21,7 +20,7 @@ class AsyncMultipleModelsSQLiteDatabase:
         """
         # 创建同步数据库实例
         self.sync_db = MultipleModelsSQLiteDatabase(
-            db_path, model_classes, model_primary_keys_dict, class_to_table_name_dict
+            db_path, model_classes, class_to_table_name_dict
         )
         
         # 异步锁和定时触发器
@@ -32,7 +31,7 @@ class AsyncMultipleModelsSQLiteDatabase:
         self.logger.setLevel(logging.INFO)
     
     async def Initiate(self, check_same_thread: bool = True, commit_when_leave: bool = False, 
-                      verbose_level: int = 10, commit_interval: float = 20.0) -> None:
+                      verbose_level: int = logging.INFO, commit_interval: float = 20.0) -> None:
         """
         初始化数据库连接和结构
         
@@ -66,7 +65,7 @@ class AsyncMultipleModelsSQLiteDatabase:
         """在指定时间后自动提交"""
         await self._timed_trigger.ActivateTimedTrigger(seconds)
     
-    async def InsertRecord(self, item: IJsonSerializable, or_condition: str = "") -> None:
+    async def InsertRecord(self, item: IJsonSerializable, on_conflict: str = "", update_primary_key: bool = False) -> None:
         """
         异步插入记录
         
@@ -75,7 +74,7 @@ class AsyncMultipleModelsSQLiteDatabase:
             or_condition: 冲突解决策略 (如"OR IGNORE", "OR REPLACE")
         """
         async with self._lock:
-            self.sync_db.InsertRecord(item, or_condition)
+            self.sync_db.InsertRecord(item, on_conflict, update_primary_key)
             await self.AutoCommitAfter(5.0)
     
     async def RemoveRecord(self, item: IJsonSerializable) -> None:
@@ -90,22 +89,29 @@ class AsyncMultipleModelsSQLiteDatabase:
             await self.AutoCommitAfter(5.0)
     
     async def QueryRecords(self, model_class: typing.Type[PySQLModel], 
-                         query_condition: typing.Optional[str] = None) -> typing.List[PySQLModel]:
+                           where: typing.Optional[str] = None, 
+                           params: typing.Tuple = ()) -> typing.List[PySQLModel]:
         """
         异步查询记录
         
         参数:
             model_class: 模型类
-            query_condition: WHERE条件
         
         返回:
             模型对象列表
         """
         # 查询操作不需要加锁
-        return self.sync_db.QueryRecords(model_class, query_condition)
+        return self.sync_db.QueryRecords(model_class, where, params)
+    
+    async def QueryOne(self, model_class: typing.Type[PySQLModel], 
+                       where: typing.Optional[str] = None, 
+                       params: typing.Tuple = ()) -> typing.Optional[PySQLModel]:
+        """异步查询单条记录"""
+        return self.sync_db.QueryOne(model_class, where, params)
+
     
     async def QueryRecordsAdvanced(self, model_class: typing.Type[PySQLModel], 
-                                 sub_condition: typing.Optional[str] = None) -> typing.List[PySQLModel]:
+                                   sub_condition: typing.Optional[str] = None) -> typing.List[PySQLModel]:
         """
         高级查询记录
         
@@ -120,7 +126,8 @@ class AsyncMultipleModelsSQLiteDatabase:
         return self.sync_db.QueryRecordsAdvanced(model_class, sub_condition)
     
     async def QueryRecordsAsJson(self, model_class: typing.Type[PySQLModel], 
-                               query_condition: typing.Optional[str] = None) -> typing.List[dict]:
+                                 where: typing.Optional[str] = None, 
+                                 params: typing.Tuple = ()) -> typing.List[dict]:
         """
         查询记录并返回JSON格式
         
@@ -132,7 +139,7 @@ class AsyncMultipleModelsSQLiteDatabase:
             字典列表
         """
         # 查询操作不需要加锁
-        return self.sync_db.QueryRecordsAsJson(model_class, query_condition)
+        return self.sync_db.QueryRecordsAsJson(model_class, where, params)
     
     async def RawQueryRecords(self, model_class: typing.Type[PySQLModel], 
                             query_key: str = "*", 
@@ -152,8 +159,8 @@ class AsyncMultipleModelsSQLiteDatabase:
         return self.sync_db.RawQueryRecords(model_class, query_key, query_condition)
     
     async def RawSelectFieldFromTableWithReturnFieldName(self, model_class: typing.Type[PySQLModel], 
-                                                       fields: typing.Union[str, typing.List[str]], 
-                                                       sub_condition: typing.Optional[str] = None) -> typing.List[dict]:
+                                                         fields: typing.Union[str, typing.List[str]], 
+                                                         sub_condition: typing.Optional[str] = None) -> typing.List[dict]:
         """
         查询指定字段并返回字段名
         
@@ -169,7 +176,7 @@ class AsyncMultipleModelsSQLiteDatabase:
         return self.sync_db.RawSelectFieldFromTableWithReturnFieldName(model_class, fields, sub_condition)
     
     async def RecordFieldChanged(self, item: IJsonSerializable, 
-                               update_fields: typing.Union[str, typing.List[str]]) -> None:
+                                 update_fields: typing.Union[str, typing.List[str]]) -> None:
         """
         异步更新记录的指定字段
         
@@ -189,12 +196,6 @@ class AsyncMultipleModelsSQLiteDatabase:
         else:
             self.sync_db.Commit()
     
-    async def RollbackAsync(self) -> None:
-        """异步回滚事务"""
-        async with self._lock:
-            if self.sync_db._conn:
-                self.sync_db._conn.Rollback()
-    
     async def Close(self) -> None:
         """关闭数据库连接"""
         # 停止自动提交任务
@@ -204,25 +205,8 @@ class AsyncMultipleModelsSQLiteDatabase:
         await self.CommitAsync(lock=False)
         
         # 关闭连接
-        self.sync_db._conn.Close()
+        self.sync_db.Close()
         self.logger.info("Database connection closed")
-    
-    # 代理其他可能需要的方法
-    @property
-    def db_path(self):
-        return self.sync_db.db_path
-    
-    @property
-    def model_classes(self):
-        return self.sync_db.model_classes
-    
-    @property
-    def model_primary_keys_dict(self):
-        return self.sync_db.model_primary_keys_dict
-    
-    @property
-    def class_to_table_name_dict(self):
-        return self.sync_db.class_to_table_name_dict
 
 # 测试用例
 if __name__ == "__main__":
@@ -246,11 +230,10 @@ if __name__ == "__main__":
         timestamp: datetime.datetime = Field(default="CURRENT_TIMESTAMP")
     
     async def main():
-        # 初始化数据库
+        # 初始化数据库 (修正参数)
         db = AsyncMultipleModelsSQLiteDatabase(
             "test_async.db", 
-            [TestClassA, TestClassB],
-            model_primary_keys_dict={TestClassA: "id", TestClassB: "id"}
+            [TestClassA, TestClassB]
         )
         await db.Initiate(commit_interval=10.0)
         
@@ -258,27 +241,30 @@ if __name__ == "__main__":
         item_a = TestClassA()
         item_a.name = "Test Item"
         item_a.value = 42.0
-        await db.InsertRecord(item_a)
-        print(f"Inserted item_a")
+        await db.InsertRecord(item_a, update_primary_key=True)  # 使用默认的update_primary_key=True
+        print(f"Inserted item_a with ID: {item_a.id}")  # 检查ID更新
         
         item_b = TestClassB()
         item_b.description = "Test Description"
-        await db.InsertRecord(item_b)
-        print(f"Inserted item_b")
+        await db.InsertRecord(item_b, update_primary_key=True)
+        print(f"Inserted item_b with ID: {item_b.id}")
         
-        # 查询记录
-        items_a = await db.QueryRecords(TestClassA)
-        print(f"Found {len(items_a)} items in TestClassA")
-        for item in items_a:
-            print(f"Item ID: {item.id}, Name: {item.name}, Value: {item.value}")
+        # 使用QueryOne方法
+        first_a = await db.QueryOne(TestClassA, where="name = ?", params=("Test Item",))
+        if first_a:
+            print(f"First item value: {first_a.value}")
         
         # 更新记录
-        if items_a:
-            items_a[0].value = 99.0
-            await db.RecordFieldChanged(items_a[0], ["value"])
+        if first_a:
+            first_a.value = 99.0
+            await db.RecordFieldChanged(first_a, ["value"])
         
         # 删除记录
         await db.RemoveRecord(item_b)
+        
+        # 查询TestClassB检查是否删除成功
+        items_b = await db.QueryRecords(TestClassB)
+        print(f"Items in TestClassB after deletion: {len(items_b)}")
         
         # 关闭数据库
         await db.Close()
