@@ -6,8 +6,10 @@ from python_general_lib.database.sqlite3_wrap.multiple_models_sqlite_database im
 from python_general_lib.async_component.async_timed_trigger import AsyncTimedTrigger
 from python_general_lib.interface.json_serializable import IJsonSerializable
 
+Tp = typing.TypeVar('Tp')
+
 class AsyncMultipleModelsSQLiteDatabase:
-    def __init__(self, db_path: str, model_classes: typing.List[typing.Type[PySQLModel]], 
+    def __init__(self, db_path: str, model_classes: typing.List[typing.Type[Tp]], 
                  class_to_table_name_dict: typing.Optional[typing.Dict[typing.Type, str]] = None) -> None:
         """
         异步SQLite数据库管理器，基于同步版本封装
@@ -88,9 +90,9 @@ class AsyncMultipleModelsSQLiteDatabase:
             self.sync_db.RemoveRecord(item)
             await self.AutoCommitAfter(5.0)
     
-    async def QueryRecords(self, model_class: typing.Type[PySQLModel], 
+    async def QueryRecords(self, model_class: typing.Type[Tp], 
                            where: typing.Optional[str] = None, 
-                           params: typing.Tuple = ()) -> typing.List[PySQLModel]:
+                           params: typing.Tuple = ()) -> typing.List[Tp]:
         """
         异步查询记录
         
@@ -103,15 +105,15 @@ class AsyncMultipleModelsSQLiteDatabase:
         # 查询操作不需要加锁
         return self.sync_db.QueryRecords(model_class, where, params)
     
-    async def QueryOne(self, model_class: typing.Type[PySQLModel], 
+    async def QueryOne(self, model_class: typing.Type[Tp], 
                        where: typing.Optional[str] = None, 
-                       params: typing.Tuple = ()) -> typing.Optional[PySQLModel]:
+                       params: typing.Tuple = ()) -> typing.Optional[Tp]:
         """异步查询单条记录"""
         return self.sync_db.QueryOne(model_class, where, params)
 
     
-    async def QueryRecordsAdvanced(self, model_class: typing.Type[PySQLModel], 
-                                   sub_condition: typing.Optional[str] = None) -> typing.List[PySQLModel]:
+    async def QueryRecordsAdvanced(self, model_class: typing.Type[Tp], 
+                                   sub_condition: typing.Optional[str] = None) -> typing.List[Tp]:
         """
         高级查询记录
         
@@ -125,7 +127,7 @@ class AsyncMultipleModelsSQLiteDatabase:
         # 查询操作不需要加锁
         return self.sync_db.QueryRecordsAdvanced(model_class, sub_condition)
     
-    async def QueryRecordsAsJson(self, model_class: typing.Type[PySQLModel], 
+    async def QueryRecordsAsJson(self, model_class: typing.Type[Tp], 
                                  where: typing.Optional[str] = None, 
                                  params: typing.Tuple = ()) -> typing.List[dict]:
         """
@@ -141,7 +143,7 @@ class AsyncMultipleModelsSQLiteDatabase:
         # 查询操作不需要加锁
         return self.sync_db.QueryRecordsAsJson(model_class, where, params)
     
-    async def RawQueryRecords(self, model_class: typing.Type[PySQLModel], 
+    async def RawQueryRecords(self, model_class: typing.Type[Tp], 
                             query_key: str = "*", 
                             query_condition: typing.Optional[str] = None) -> typing.List[typing.Any]:
         """
@@ -158,7 +160,7 @@ class AsyncMultipleModelsSQLiteDatabase:
         # 查询操作不需要加锁
         return self.sync_db.RawQueryRecords(model_class, query_key, query_condition)
     
-    async def RawSelectFieldFromTableWithReturnFieldName(self, model_class: typing.Type[PySQLModel], 
+    async def RawSelectFieldFromTableWithReturnFieldName(self, model_class: typing.Type[Tp], 
                                                          fields: typing.Union[str, typing.List[str]], 
                                                          sub_condition: typing.Optional[str] = None) -> typing.List[dict]:
         """

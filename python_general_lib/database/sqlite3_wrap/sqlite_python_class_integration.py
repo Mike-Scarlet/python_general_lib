@@ -3,6 +3,8 @@ import datetime
 from python_general_lib.database.sqlite3_wrap.sqlite_structure import SQLField, SQLTable, SQLDatabase, ForeignKey, UniqueConstraint, Index, PrimaryKeyConstraint
 from python_general_lib.interface.json_serializable import AutoObjectToJsonHandler, AutoObjectFromJsonHander
 
+Tp = TypeVar('Tp')
+
 # SQL type mapping for Python types
 TYPE_MAP = {
   int: "INTEGER",
@@ -75,7 +77,6 @@ class Field:
       check=self.check
     )
 
-Tp = TypeVar('Tp')
 def PySQLModel(cls: Type[Tp] = None, *, initialize_fields: bool = False) -> Tp:
   """
   Model decorator for creating SQL ORM classes with advanced configuration options.

@@ -6,8 +6,10 @@ from python_general_lib.interface.json_serializable import IJsonSerializable
 import typing
 import logging
 
+Tp = typing.TypeVar('Tp')
+
 class MultipleModelsSQLiteDatabase:
-    def __init__(self, db_path: str, model_classes: typing.List[typing.Type[PySQLModel]], 
+    def __init__(self, db_path: str, model_classes: typing.List[typing.Type[Tp]], 
                  class_to_table_name_dict: typing.Optional[typing.Dict[typing.Type, str]] = None) -> None:
         """
         SQLite数据库管理器，支持多个PySQLModel模型类
@@ -164,9 +166,9 @@ class MultipleModelsSQLiteDatabase:
         where_stmt = " AND ".join(where_parts)
         return self._crud.Delete(table_name, where_stmt, tuple(params))
     
-    def QueryRecords(self, model_class: typing.Type[PySQLModel], 
+    def QueryRecords(self, model_class: typing.Type[Tp], 
                      where: typing.Optional[str] = None, 
-                     params: typing.Tuple = ()) -> typing.List[PySQLModel]:
+                     params: typing.Tuple = ()) -> typing.List[Tp]:
         """
         查询记录
         
@@ -182,9 +184,9 @@ class MultipleModelsSQLiteDatabase:
         records = self._crud.Query(table_name, where=where, params=params)
         return [self._record_to_model(model_class, record) for record in records]
     
-    def QueryOne(self, model_class: typing.Type[PySQLModel], 
+    def QueryOne(self, model_class: typing.Type[Tp], 
                  where: typing.Optional[str] = None, 
-                 params: typing.Tuple = ()) -> typing.Optional[PySQLModel]:
+                 params: typing.Tuple = ()) -> typing.Optional[Tp]:
         """
         查询单个记录
         
@@ -200,8 +202,8 @@ class MultipleModelsSQLiteDatabase:
         record = self._crud.QueryOne(table_name, where=where, params=params)
         return self._record_to_model(model_class, record) if record else None
     
-    def QueryRecordsAdvanced(self, model_class: typing.Type[PySQLModel], 
-                             sub_condition: typing.Optional[str] = None) -> typing.List[PySQLModel]:
+    def QueryRecordsAdvanced(self, model_class: typing.Type[Tp], 
+                             sub_condition: typing.Optional[str] = None) -> typing.List[Tp]:
         """
         高级查询 (支持完整的SQL子句)
         
@@ -223,7 +225,7 @@ class MultipleModelsSQLiteDatabase:
         records = [dict(zip(column_names, row)) for row in cursor.fetchall()]
         return [self._record_to_model(model_class, record) for record in records]
     
-    def QueryRecordsAsJson(self, model_class: typing.Type[PySQLModel], 
+    def QueryRecordsAsJson(self, model_class: typing.Type[Tp], 
                            where: typing.Optional[str] = None, 
                            params: typing.Tuple = ()) -> typing.List[dict]:
         """
@@ -240,7 +242,7 @@ class MultipleModelsSQLiteDatabase:
         table_name = self.class_to_table_name_dict[model_class]
         return self._crud.Query(table_name, where=where, params=params)
     
-    def RawQueryRecords(self, model_class: typing.Type[PySQLModel], 
+    def RawQueryRecords(self, model_class: typing.Type[Tp], 
                         query_key: str = "*", 
                         query_condition: typing.Optional[str] = None) -> typing.List[typing.Any]:
         """
@@ -258,7 +260,7 @@ class MultipleModelsSQLiteDatabase:
         where = query_condition if query_condition else None
         return self._crud.Query(table_name, columns=query_key, where=where)
     
-    def RawSelectFieldFromTableWithReturnFieldName(self, model_class: typing.Type[PySQLModel], 
+    def RawSelectFieldFromTableWithReturnFieldName(self, model_class: typing.Type[Tp], 
                                                    fields: typing.Union[str, typing.List[str]], 
                                                    sub_condition: typing.Optional[str] = None) -> typing.List[dict]:
         """
@@ -332,7 +334,7 @@ class MultipleModelsSQLiteDatabase:
             self._connector.Close()
             self.logger.info("Database connection closed")
     
-    def _get_primary_keys(self, model_class: typing.Type[PySQLModel]) -> typing.List[str]:
+    def _get_primary_keys(self, model_class: typing.Type[Tp]) -> typing.List[str]:
         """获取模型类的主键字段"""
         if model_class in self._primary_key_cache:
             return self._primary_key_cache[model_class]
@@ -356,7 +358,7 @@ class MultipleModelsSQLiteDatabase:
         self._primary_key_cache[model_class] = result
         return result
     
-    def _record_to_model(self, model_class: typing.Type[PySQLModel], record: dict) -> PySQLModel:
+    def _record_to_model(self, model_class: typing.Type[Tp], record: dict) -> Tp:
         """将数据库记录转换为模型对象"""
         obj = model_class()
         obj.FromJson(record)
