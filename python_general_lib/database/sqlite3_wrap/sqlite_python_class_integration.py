@@ -77,7 +77,7 @@ class Field:
       check=self.check
     )
 
-def PySQLModel(cls: Type[Tp] = None, *, initialize_fields: bool = False) -> Tp:
+def PySQLModel(cls: Type[Tp] = None, *, initialize_fields: bool = False, inherit_fields: bool = False) -> Tp:
   """
   Model decorator for creating SQL ORM classes with advanced configuration options.
   
@@ -94,6 +94,7 @@ def PySQLModel(cls: Type[Tp] = None, *, initialize_fields: bool = False) -> Tp:
   Args:
     cls: Class to decorate (handled automatically)
     initialize_fields: Initialize fields with default values on instantiation
+    inherit_fields: Inherit field definitions from base classes
   
   Returns:
     Enhanced class with SQL modeling capabilities
@@ -192,6 +193,9 @@ def PySQLModel(cls: Type[Tp] = None, *, initialize_fields: bool = False) -> Tp:
       for key in process_keys:
         if hasattr(meta, key):
           cls._sql_meta[key] = getattr(meta, key)
+
+    # set inherit fields
+    cls._sql_inherit_fields = inherit_fields
 
     # Add JSON serialization methods if not defined
     if not hasattr(cls, 'ToJson'):
@@ -296,26 +300,47 @@ def _CreateTableFromModel(model_class: Type) -> SQLTable:
   meta = model_class._sql_meta
   table = SQLTable(meta['table_name'])
   
-  # Get all class annotations
-  annotations = model_class.__annotations__
+  # Check if field inheritance is enabled
+  inherit_fields = getattr(model_class, '_sql_inherit_fields', False)
   
-  # Add fields
-  for field_name, field_type in annotations.items():
+  # Get all class annotations (with inheritance if enabled)
+  field_defs = {}
+  if inherit_fields:
+    # Traverse MRO for base classes (excluding object)
+    for base_class in reversed(model_class.mro()):
+      if base_class is object:
+        continue
+      if not hasattr(base_class, '__annotations__'):
+        continue
+        
+      for field_name, field_type in base_class.__annotations__.items():
+        if field_name.startswith('__'):
+          continue
+          
+        field_def = getattr(base_class, field_name, None)
+        if not isinstance(field_def, Field):
+          field_def = Field()
+          
+        field_defs[field_name] = (field_type, field_def)
+  
+  # Always process current class fields (overrides inherited fields)
+  for field_name, field_type in model_class.__annotations__.items():
     # Skip special fields
     if field_name.startswith('__'):
       continue
-    
+      
     # Get field definition
     field_def = getattr(model_class, field_name, None)
     
     # If not Field instance, create a default one
     if not isinstance(field_def, Field):
       field_def = Field()
-    
-    # Convert Python type to SQL type
+      
+    field_defs[field_name] = (field_type, field_def)
+  
+  # Add fields to table
+  for field_name, (field_type, field_def) in field_defs.items():
     sql_field = field_def.ToSQLField(field_name, field_type)
-    
-    # Add field to table
     table.AddField(sql_field)
   
   # Set primary key (table-level primary key has priority)
