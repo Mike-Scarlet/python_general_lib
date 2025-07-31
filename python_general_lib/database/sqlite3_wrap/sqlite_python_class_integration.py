@@ -27,7 +27,8 @@ class Field:
                unique: bool = False, 
                not_null: bool = False, 
                default: Any = None, 
-               check: str = None):
+               check: str = None,
+               override_type = None):
     """
     Initialize SQL field definition
     
@@ -42,9 +43,13 @@ class Field:
     self.not_null = not_null
     self.default = default
     self.check = check
+    self.override_type = override_type
   
   def ToSQLField(self, name: str, field_type: Type) -> SQLField:
     """Convert Python field to SQLField object"""
+    if self.override_type:
+      field_type = self.override_type
+
     # Get SQL type
     sql_type = TYPE_MAP.get(field_type, "TEXT")
     
