@@ -210,6 +210,10 @@ class AsyncMultipleModelsSQLiteDatabase:
         self.sync_db.Close()
         self.logger.info("Database connection closed")
 
+    async def StopTrigger(self):
+        await self.CommitAsync()
+        await self._timed_trigger.StopTriggerHandlerTask()
+
 # 测试用例
 if __name__ == "__main__":
     import datetime
