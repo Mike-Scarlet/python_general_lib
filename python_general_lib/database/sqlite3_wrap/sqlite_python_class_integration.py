@@ -238,10 +238,20 @@ def PySQLModel(cls: Type[Tp] = None, *, initialize_fields: bool = False, inherit
               default_value = field_def.default
           
           setattr(self, field_name, default_value)
-        
-        # Call original __init__ if exists
-        if original_init:
+
+        # Apply kwargs that name declared fields directly
+        for key, value in kwargs.items():
+          if key in annotations:
+            setattr(self, key, value)
+
+        # Call original __init__ if user-defined (object.__init__ rejects extra args)
+        if original_init and original_init is not object.__init__:
           original_init(self, *args, **kwargs)
+        else:
+          # plain class: positional args or misspelled field names are errors
+          unknown = [k for k in kwargs if k not in annotations]
+          if args or unknown:
+            raise TypeError(f"{cls.__name__}() got unexpected arguments: args={args}, kwargs={unknown}")
       
       cls.__init__ = new_init
     
