@@ -383,7 +383,11 @@ class SQLite3Connector:
       raise
 
   def __del__(self):
-    self.Close()
+    # 解释器退出期 logging 模块已被拆除，Close 里的日志调用会抛异常；吞掉以保证收尾不报错
+    try:
+      self.Close()
+    except Exception:
+      pass
 
 if __name__ == "__main__":
   table_name_initiate_dict = {
