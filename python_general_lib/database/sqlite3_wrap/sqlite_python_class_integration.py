@@ -263,10 +263,16 @@ def PySQLModel(cls: Type[Tp] = None, *, initialize_fields: bool = False, inherit
         if original_init and original_init is not object.__init__:
           original_init(self, *args, **kwargs)
         else:
-          # plain class: positional args or misspelled field names are errors
-          unknown = [k for k in kwargs if k not in annotations]
+          # plain class: positional args or misspelled field names are errors.
+          # Validate against ALL annotations visible on the instantiated class
+          # (MRO walk): a chained parent new_init must not reject kwargs owned
+          # by the subclass that delegated to it.
+          known_fields = set()
+          for klass in type(self).__mro__:
+            known_fields.update(klass.__dict__.get('__annotations__', {}))
+          unknown = [k for k in kwargs if k not in known_fields]
           if args or unknown:
-            raise TypeError(f"{cls.__name__}() got unexpected arguments: args={args}, kwargs={unknown}")
+            raise TypeError(f"{type(self).__name__}() got unexpected arguments: args={args}, kwargs={unknown}")
       
       cls.__init__ = new_init
     
