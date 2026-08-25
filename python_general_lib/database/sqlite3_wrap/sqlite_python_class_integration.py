@@ -202,6 +202,21 @@ def PySQLModel(cls: Type[Tp] = None, *, initialize_fields: bool = False, inherit
     # set inherit fields
     cls._sql_inherit_fields = inherit_fields
 
+    # Merge inherited field annotations into the class itself.
+    # Rationale: _CreateTableFromModel walks the MRO for schema generation,
+    # but runtime consumers reading cls.__annotations__ (field init in
+    # new_init, primary-key type lookup, crawler field mapping, ...) would
+    # otherwise never see inherited fields. Use base __dict__ so each base
+    # contributes only its own annotations (attribute lookup would resolve
+    # to the grandparent's dict for annotation-less bases).
+    if inherit_fields:
+      merged_annotations = {}
+      for base_class in reversed(cls.mro()):
+        if base_class is object:
+          continue
+        merged_annotations.update(base_class.__dict__.get('__annotations__', {}))
+      cls.__annotations__ = merged_annotations
+
     # Add JSON serialization methods if not defined
     if not hasattr(cls, 'ToJson'):
       def to_json(self) -> Union[dict, list]:
