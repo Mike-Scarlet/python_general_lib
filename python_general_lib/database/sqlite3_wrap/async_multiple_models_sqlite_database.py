@@ -29,8 +29,7 @@ class AsyncMultipleModelsSQLiteDatabase:
         self._lock = asyncio.Lock()
         self._timed_trigger = AsyncTimedTrigger()
         
-        self.logger = logging.getLogger("AsyncMultipleModelsSQLiteDatabase")
-        self.logger.setLevel(logging.INFO)
+        self.logger = logging.getLogger("AsyncMultipleModelsSQLiteDatabase")  # 级别归应用管，构造函数不 setLevel
     
     async def Initiate(self, loop: asyncio.AbstractEventLoop, check_same_thread: bool = True, commit_when_leave: bool = False, 
                       verbose_level: int = logging.INFO, commit_interval: float = 20.0) -> None:
@@ -40,7 +39,7 @@ class AsyncMultipleModelsSQLiteDatabase:
         参数:
             check_same_thread: SQLite线程安全检查
             commit_when_leave: 退出时自动提交（设置为False，由我们控制提交）
-            verbose_level: 日志级别
+            verbose_level: 废弃不生效（库不设 logger 级别，见 SQLite3Connector docstring）
             commit_interval: 自动提交间隔（秒）
         """
         # 初始化同步数据库

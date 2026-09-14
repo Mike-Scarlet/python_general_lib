@@ -15,14 +15,15 @@ class SQLite3Connector:
       path: Database file path
       structure: Database structure definition (optional)
       commit_when_leave: Whether to automatically commit when object is destroyed
-      verbose_level: Logging level
+      verbose_level: Deprecated no-op. The library never sets logger levels — a ctor-set
+      level on this shared named logger is re-applied on every instantiation and would
+      clobber the application's logging config; configure via logging.getLogger("SQLConnector")
       foreign_keys: Whether to enable foreign key constraints
     """
     self.structure = copy.deepcopy(structure) if structure else SQLDatabase()
     self.path = path
     self.commit_when_leave = commit_when_leave
     self.logger = logging.getLogger("SQLConnector")
-    self.logger.setLevel(verbose_level)
     self.conn = None
     self.foreign_keys = foreign_keys
     

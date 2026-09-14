@@ -31,8 +31,10 @@ class MultipleModelsSQLiteDatabase:
         
         self._connector = None
         self._crud = None
+        # 级别归应用管：构造函数 setLevel 会在每次实例化时反扑应用配置
+        # （2026-09-15 同步脚本日志刷屏根因），需要安静由应用对
+        # "MultipleModelsSQLiteDatabase" getLogger 后自设
         self.logger = logging.getLogger("MultipleModelsSQLiteDatabase")
-        self.logger.setLevel(logging.INFO)
     
     def Initiate(self, check_same_thread: bool = True, commit_when_leave: bool = True, 
                  verbose_level: int = logging.INFO) -> None:
@@ -42,7 +44,7 @@ class MultipleModelsSQLiteDatabase:
         参数:
             check_same_thread: SQLite线程安全检查
             commit_when_leave: 退出时自动提交
-            verbose_level: 日志级别
+            verbose_level: 废弃不生效（库不设 logger 级别，见 SQLite3Connector docstring）
         """
         # 生成数据库结构
         db_structure = GenerateSQLDatabase(*self.model_classes)
