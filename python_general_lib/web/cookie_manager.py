@@ -31,6 +31,9 @@ class CookieManager:
   def SetCookieSavePath(self, path):
     self.cookie_storage_path = path
 
+  def Save(self):
+    self._exit()
+
   def RegisterAutoCookieSave(self):
     if self.cookie_storage_path is None:
       self.logger.error("cannot RegisterAutoCookieSave when cookie_storage_path is None")
